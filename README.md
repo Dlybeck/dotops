@@ -44,7 +44,8 @@ UI. Optional context and skills require explicit configuration or selection.
 ## Quickstart: install and run safe tests
 
 This initial source release targets **Linux and Node 22** (22.23.3 is pinned in
-`.node-version`), with `/usr/bin/flock`. The fixture tests require no Codex account,
+`.node-version`), with `/usr/bin/flock` and accessible `/proc/self/fd`.
+The fixture tests require no Codex account,
 credentials or native daemon. Live use requires an already authenticated local
 Codex App Server with the required experimental APIs and Unix WebSocket socket.
 
@@ -131,7 +132,7 @@ text and ordinary question answers are not owner consent. Native check-and-start
 is non-atomic. Tracked command leader exit does not guarantee that all detached
 OS descendants stopped. Ambiguous delegation grants no child-stop authority.
 
-The current candidate passes **387 fixture tests**. The earlier restored source
+The current candidate passes **398 fixture tests**. The earlier restored source
 passed four bounded native core scenarios:
 start/steer/replay/completion, owned command stop/reconnect, attributable delegation
 completion/reconnect/subsequent start, and later unowned work blocking admission

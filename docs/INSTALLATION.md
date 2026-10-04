@@ -2,7 +2,8 @@
 
 ## Prerequisites and clean verification
 
-Use Linux with Node 22 and `/usr/bin/flock`. `.node-version` pins 22.23.3;
+Use Linux with Node 22, `/usr/bin/flock` and accessible `/proc/self/fd`.
+`.node-version` pins 22.23.3;
 `package.json` requires Node >=22 and <23. Set up that version with your usual
 Node version manager, then clone https://github.com/Dlybeck/dotops and run:
 
@@ -46,7 +47,14 @@ node src/stage1/watchdog.mjs --access-mode user-directories
 Expected stdout: `Stage 1 watchdog ready.` The process remains running.
 Its default state directory is `$HOME/Projects/codex-dot-connector/var/stage1`,
 with private mode0700 and socket mode0600. Legacy directory names preserve
-compatibility. Only one writer may own a journal. If another installation uses
+compatibility. Missing parent directories are initialized with mode0700, starting
+under an existing safe directory owned by the runtime user. Existing ancestors
+must be canonical directories owned by that user or root, without group/other
+write access; root-owned sticky system directories may be traversed. Symlinks,
+file collisions and unsafe permissions are rejected, never repaired with chmod.
+The leaf journal still requires user ownership and mode0700. Initialization uses
+Linux descriptor-relative traversal through `/proc/self/fd`.
+Only one writer may own a journal. If another installation uses
 that location, review its configuration and separately plan a replacement; do
 not delete its lock/state or change live services as an installation shortcut.
 

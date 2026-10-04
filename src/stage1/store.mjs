@@ -5,10 +5,49 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fail } from '../safety.mjs';
 
+async function openDirectory(entry) {
+  try { return await open(entry, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); }
+  catch (error) {
+    if (['ENOTDIR', 'ELOOP', 'EACCES'].includes(error.code)) fail('UNSAFE_STATE_DIRECTORY');
+    throw error;
+  }
+}
+
+async function initializeStateDirectory(dir) {
+  const uid = process.getuid();
+  let directory = await openDirectory('/');
+  try {
+    for (const component of dir.split('/').filter(Boolean)) {
+      const parent = await directory.stat();
+      // Root-owned sticky system directories (such as /tmp) may be traversed,
+      // but missing directories are created only under a safe user-owned parent.
+      const writable = parent.mode & 0o022;
+      if (![0, uid].includes(parent.uid) || writable && !(parent.uid === 0 && parent.mode & 0o1000))
+        fail('UNSAFE_STATE_DIRECTORY');
+      // Linux descriptor-relative traversal avoids following a swapped ancestor
+      // or a symlink while initializing a missing path. No chmod or repair.
+      const entry = `/proc/self/fd/${directory.fd}/${component}`;
+      let next;
+      try { next = await openDirectory(entry); }
+      catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        if (parent.uid !== uid || writable) fail('UNSAFE_STATE_DIRECTORY');
+        await mkdir(entry, { mode: 0o700 }).catch(e => { if (e.code !== 'EEXIST') throw e; });
+        next = await openDirectory(entry);
+      }
+      await directory.close(); directory = next;
+    }
+    const leaf = await directory.stat(), current = await lstat(dir);
+    if (!leaf.isDirectory() || leaf.uid !== uid || (leaf.mode & 0o777) !== 0o700 ||
+        current.dev !== leaf.dev || current.ino !== leaf.ino || await realpath(dir) !== dir ||
+        await realpath(`/proc/self/fd/${directory.fd}`) !== dir) fail('UNSAFE_STATE_DIRECTORY');
+  } finally { await directory.close(); }
+}
+
 export class Store {
   static async open(dir) {
     const s = new Store(); s.dir = path.resolve(dir); s.tail = Promise.resolve();
-    await mkdir(s.dir, { mode: 0o700 }).catch(e => { if (e.code !== 'EEXIST') throw e; });
+    await initializeStateDirectory(s.dir);
     const d = await lstat(s.dir);
     if (!d.isDirectory() || d.uid !== process.getuid() || (d.mode & 0o777) !== 0o700 || await realpath(s.dir) !== s.dir) fail('UNSAFE_STATE_DIRECTORY');
     // Kernel advisory locking makes simultaneous stale-owner recovery atomic. The fixed
