@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import { Controller } from '../src/stage1/controller.mjs';
 import { fixture, A, R, T } from './stage1-fixture.mjs';
 const CHILD = '55555555-5555-4555-8555-555555555555';
@@ -18,7 +19,14 @@ async function setup(t) {
     socket.send(JSON.stringify({ id: q.id, result: { turn: next } })); return true;
   };
   return { f, root, turn, get c() { return c; },
-    async restart() { await c.close(); c = await Controller.open(options); },
+    async restart(transform) {
+      await c.close();
+      if (transform) {
+        const file = options.stateDir + '/state.json', state = JSON.parse(await readFile(file, 'utf8'));
+        transform(state); await writeFile(file, JSON.stringify(state), { mode: 0o600 });
+      }
+      c = await Controller.open(options);
+    },
     send: () => c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: root.turns.at(-1).id, acknowledgeConcurrentStartRisk: true }) };
 }
 test('closed owned operation admits after reconnect without reopening unloaded historical descendants', async t => {
@@ -218,6 +226,108 @@ test('goal ownership fingerprint survives reconnect and confirmed closure does n
   await s.restart();
   const stopped = await s.c.call('codex_chat_stop', { requestId: randomUUID(), threadId: A, turnId: T });
   assert.equal(stopped.verifiedStopped, true); assert.equal(s.f.goal.status, 'active');
+});
+
+test('observed native pause retires only that owned goal operation across manual resume and restart', async t => {
+  const s = await setup(t), requestId = randomUUID();
+  const initial = await s.c.call('codex_chat_status', { threadId: A });
+  await s.c.call('codex_chat_goal', { requestId, threadId: A,
+    expectedGoalHash: initial.admission.nativeGoalHash, action: 'set', objective: 'Owned continuation operation' });
+  s.f.goal.status = 'paused'; // Native owner action, not a connector goal-control receipt.
+  const stopped = await s.c.call('codex_chat_stop', { requestId: randomUUID(), threadId: A, turnId: T });
+  assert.equal(stopped.verifiedStopped, true);
+  s.f.goal.status = 'active'; // Later manual reactivation must not reopen that operation.
+  s.root.turns.push({ id: randomUUID(), status: 'inProgress', itemsView: 'full', items: [] });
+  s.root.status = { type: 'active' };
+  await s.restart();
+  let status = await s.c.call('codex_chat_status', { threadId: A });
+  assert.equal(status.stopVerification.verifiedStopped, true);
+  assert.equal(status.admission.newStart, 'blocked');
+  assert.equal(status.stopVerification.targetBusy, true);
+  assert.ok(status.admission.reasons.includes('CHAT_NOT_IDLE'));
+  assert.equal(status.admission.ownedContinuations.items.find(item => item.requestId === requestId).state, 'closed');
+  const resumed = randomUUID();
+  await s.c.call('codex_chat_goal', { requestId: resumed, threadId: A,
+    expectedGoalHash: status.admission.nativeGoalHash, action: 'resume' });
+  await s.restart(); status = await s.c.call('codex_chat_status', { threadId: A });
+  assert.equal(status.stopVerification.verifiedStopped, false);
+  assert.equal(status.admission.ownedContinuations.items.find(item => item.requestId === requestId).state, 'closed');
+  assert.equal(status.admission.ownedContinuations.items.find(item => item.requestId === resumed).reason, 'OWNED_GOAL_CONTINUATION_OPEN');
+});
+
+for (const closure of ['complete', 'clear']) test(`observed native goal ${closure} survives a later goal and restart without a stop receipt`, async t => {
+  const s = await setup(t), requestId = randomUUID();
+  const initial = await s.c.call('codex_chat_status', { threadId: A });
+  await s.c.call('codex_chat_goal', { requestId, threadId: A,
+    expectedGoalHash: initial.admission.nativeGoalHash, action: 'set', objective: 'Exact observed operation' });
+  const ownedGoal = structuredClone(s.f.goal);
+  if (closure === 'clear') s.f.goal = null; else s.f.goal.status = 'complete';
+  const closed = await s.c.call('codex_chat_status', { threadId: A });
+  assert.equal(closed.admission.ownedContinuations.items.find(item => item.requestId === requestId).state, 'closed');
+  s.f.goal = { ...ownedGoal, status: 'active' };
+  await s.restart();
+  const status = await s.c.call('codex_chat_status', { threadId: A });
+  assert.equal(status.admission.ownedContinuations.items.find(item => item.requestId === requestId).state, 'closed');
+  assert.equal(status.admission.unknownOwnedObligations.open, 0);
+});
+
+for (const variant of ['different-goal', 'missing-fingerprint', 'malformed-fingerprint']) test(`native pause cannot retire unattributable goal operations: ${variant}`, async t => {
+  const s = await setup(t), requestId = randomUUID();
+  const initial = await s.c.call('codex_chat_status', { threadId: A });
+  await s.c.call('codex_chat_goal', { requestId, threadId: A,
+    expectedGoalHash: initial.admission.nativeGoalHash, action: 'set', objective: 'Still unverified operation' });
+  if (variant === 'different-goal') s.f.goal.objective = 'Different native goal';
+  else await s.restart(state => {
+    if (variant === 'missing-fingerprint') delete state.operations[requestId].ownedGoalHash;
+    else state.operations[requestId].ownedGoalHash = 'invalid-legacy-fingerprint';
+  });
+  s.f.goal.status = 'paused';
+  if (variant === 'malformed-fingerprint') s.f.goal = null;
+  const stopped = await s.c.call('codex_chat_stop', { requestId: randomUUID(), threadId: A, turnId: T });
+  assert.equal(stopped.verifiedStopped, false);
+  assert.equal(stopped.ownedContinuations.items.find(item => item.requestId === requestId).reason, 'GOAL_OWNERSHIP_AMBIGUOUS');
+  await s.restart();
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).stopVerification.verifiedStopped, false);
+});
+
+test('retired goal operations do not bypass a known live owned process', async t => {
+  const s = await setup(t), initial = await s.c.call('codex_chat_status', { threadId: A });
+  const requestId = randomUUID();
+  await s.c.call('codex_chat_goal', { requestId, threadId: A,
+    expectedGoalHash: initial.admission.nativeGoalHash, action: 'set', objective: 'Retired goal with process evidence' });
+  s.f.goal.status = 'paused';
+  assert.equal((await s.c.call('codex_chat_stop', { requestId: randomUUID(), threadId: A, turnId: T })).verifiedStopped, true);
+  s.f.goal.status = 'active'; await s.restart();
+  s.turn.items.push({ type: 'commandExecution', id: 'still-running', processId: '42', status: 'inProgress', exitCode: null });
+  s.f.terminals = [{ itemId: 'still-running', processId: '42', cwd: s.f.cwd }];
+  const status = await s.c.call('codex_chat_status', { threadId: A });
+  assert.equal(status.stopVerification.verifiedStopped, false);
+  assert.equal(status.admission.ownedContinuations.items.find(item => item.requestId === requestId).state, 'closed');
+  assert.equal(status.admission.ownedProcesses.items.find(item => item.itemId === 'still-running').state, 'live');
+  await assert.rejects(s.send(), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+});
+
+test('legacy named stop receipts without attributable goal identity do not grant closure', async t => {
+  const s = await setup(t), initial = await s.c.call('codex_chat_status', { threadId: A });
+  const requestId = randomUUID();
+  await s.c.call('codex_chat_goal', { requestId, threadId: A,
+    expectedGoalHash: initial.admission.nativeGoalHash, action: 'set', objective: 'Legacy named goal closure' });
+  // The reviewed baseline treated ANY paused native goal as closure, even a
+  // different one. Its named stop summary has no matching goal fingerprint.
+  s.f.goal = { objective: 'Different paused native goal', status: 'paused' };
+  const stopId = randomUUID();
+  await s.c.call('codex_chat_stop', { requestId: stopId, threadId: A, turnId: T });
+  await s.restart(state => {
+    delete state.operations[requestId].ownedGoalClosure;
+    const legacy = state.operations[stopId]; legacy.phase = 'stopped';
+    legacy.result.verifiedStopped = true;
+    legacy.result.ownedContinuations = { count: 1, open: 0, truncated: false, items: [
+      { kind: 'goal', requestId, state: 'closed', reason: 'NATIVE_GOAL_CONTINUATION_STOPPED' }
+    ] };
+  });
+  const unverified = await s.c.call('codex_chat_status', { threadId: A });
+  assert.equal(unverified.stopVerification.verifiedStopped, false);
+  assert.equal(unverified.admission.ownedContinuations.items.find(item => item.requestId === requestId).reason, 'GOAL_OWNERSHIP_AMBIGUOUS');
 });
 
 test('running full snapshot plus terminal event repairs the exact old turn after bounded history eviction', async t => {

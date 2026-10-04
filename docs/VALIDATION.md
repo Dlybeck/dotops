@@ -3,7 +3,7 @@
 Version0.1.0 is an initial Linux source release. Publication does not activate an
 existing connector installation or certify every native Codex build.
 
-The full source suite passes **376 tests**, including bounded MCP stdio/SDK
+The full source suite passes **387 tests**, including bounded MCP stdio/SDK
 routing, private IPC, request identity/recovery, context/skill routing, history,
 scoped ownership, stop verification and conservative counterexamples. Tests use
 isolated fixture daemons and temporary journals. Clean `npm ci --ignore-scripts`
@@ -34,6 +34,14 @@ notices match locked packages; the preparation audit reported zero advisories.
 Known private native identities and original fixture payload fingerprints were
 excluded, with synthetic replacements preserving required topology/equality.
 Raw trial metadata, prompts, journals and private contexts are not distributed.
+
+Post-review goal corrections have eleven new isolated regressions: all eleven fail on
+the reviewed restoration baseline and pass on the corrected candidate. They cover
+journal/replay privacy, legacy objective/digest migration, uncertain native clear,
+durable exact goal-operation closure, later owned resumptions, changed/missing/malformed
+identity, live owned processes and unbound legacy stop evidence. The full corrected
+suite passes 387 tests. The real-native trial above predates these goal corrections;
+no new real-native, phone/parent-client or production acceptance is claimed for them.
 
 This evidence does not prove an authenticated coordinating-UI approval bridge,
 atomic native start, universal detached-process shutdown, phone/parent-client

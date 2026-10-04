@@ -23,8 +23,9 @@ Unloaded roots are resumed without settings overrides during an authorized send,
 before terminal inventory is required. Read-only status never resumes them and
 reports unavailable inventory honestly. Explicit enrollment does not adopt old
 turns. A native goal is reported rather than treated as a connector policy gate.
-Use explicit native goal actions to pause/resume/set/clear it; clear preserves the
-prior goal in the private journal. Native comparison and mutation are not atomic.
+Use explicit native goal actions to pause/resume/set/clear it. The journal retains
+metadata and private keyed fingerprints; objective previews remain transient.
+Native comparison and mutation are not atomic.
 
 A former 100-command tracking cap caused a global volatile persistence latch.
 Command identities are now retained without that cap. Failed event transactions

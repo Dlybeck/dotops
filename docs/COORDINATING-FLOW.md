@@ -17,7 +17,9 @@
 6. For an explicitly requested goal change, use codex_chat_goal with the
    status-derived expectedGoalHash and set/pause/resume/clear action. Native usage
    counters do not invalidate the selected goal's semantic fingerprint. A clear
-   preserves the prior goal in the private journal. Native compare/set is not atomic.
+   retains prior metadata and private keyed fingerprints in the journal, never
+   objective text. Previews are transient; replay receipts contain metadata only.
+   Native compare/set is not atomic.
 7. Stop an exact recorded turn with codex_chat_stop. No message preparation or work
    window is required. Pause an active goal explicitly when continued native work
    must stop; verify turn/process/descendant/queue and goal-continuation state
@@ -57,6 +59,11 @@ subsequent reconciliation/send requires fresh process and continuation evidence.
 A prior receipt is a snapshot, never current admission authority. Each new send
 checks fresh scope twice, together with target/executor/expected-turn/queue and
 unresolved-delivery guards. Native start remains non-atomic.
+
+Observed goal pause, completion or absence retires the exact attributable goal
+operation durably. Later manual reactivation does not reopen it; a new connector
+resume is a new owned obligation. Changed identities and missing fingerprints
+stay unknown. Known live owned processes remain blocking independently.
 
 Legacy Stage1 mode retains conservative native descendant-tree and attachment
 checks. Its unloaded-child restrictions do not describe expanded mode's retired

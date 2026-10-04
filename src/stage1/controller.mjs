@@ -15,6 +15,7 @@ import { skillSelection, resolveSkills, readSkills } from './skills.mjs';
 import { latestAssistantExcerpt, sanitizedMessagePage } from '../history-text.mjs';
 import { captureOwnedTurn, validOwnershipId } from './owned-obligations.mjs';
 import { ownedScopeProof, recheckOwnedScope, requireScopeCurrent, scopeSummary } from './owned-scope.mjs';
+import { goalMetadata, goalRequestFingerprint, migrateGoalRecords } from './goal-records.mjs';
 export const CONTROL_ROOT = path.join(homedir(), 'Projects/codex-dot-connector');
 
 function acceptedSendResult(requestId, op, turnId) {
@@ -73,7 +74,8 @@ export class Controller {
       c.statusCursors = new Cursors(); c.observedUsage = new Map(); c.persistenceRetries = new Map(); c.nativeReviews = new Map(); c.native.now = c.now;
       c.store.onLost = () => { c.failed = true; c.native.close(); };
       c.native.on('event', event => { try { c.event(event); } catch { /* Malformed notifications never grant control. */ } }); c.native.on('disconnect', () => { c.questions.clear(); c.localRequests.clear(); c.deferredRequests.clear(); c.nativeReviews.clear(); });
-      await c.store.update(s => { s.ownedContinuationKey ??= randomBytes(32).toString('hex'); for (const op of Object.values(s.operations)) if (op.phase === 'dispatching') op.phase = 'unknown'; });
+      await c.store.update(s => { s.ownedContinuationKey ??= randomBytes(32).toString('hex'); migrateGoalRecords(s);
+        for (const op of Object.values(s.operations)) if (op.phase === 'dispatching') op.phase = 'unknown'; });
       return c;
     } catch (e) { c.native?.close(); await c.store.close(); throw e; }
   }
@@ -85,7 +87,8 @@ export class Controller {
     if (name === 'codex_chat_status') return this.status(args.threadId, args);
     if (name === 'codex_chat_skills') return this.listSkills(args);
     if (name === 'codex_chat_questions') return this.listQuestions(args.threadId, args);
-    const fingerprint = createHash('sha256').update(JSON.stringify([name, args])).digest('hex');
+    const digest = createHash('sha256').update(JSON.stringify([name, args])).digest('hex');
+    const fingerprint = name === 'codex_chat_goal' ? goalRequestFingerprint(this.store.state.ownedContinuationKey, digest) : digest;
     const old = this.store.state.operations[args.requestId];
     if (old && old.fingerprint !== fingerprint) fail('REQUEST_ID_CONFLICT');
     if (this.jobs.has(args.requestId)) { const job = this.jobs.get(args.requestId); if (job.fingerprint !== fingerprint) fail('REQUEST_ID_CONFLICT'); return job.promise; }
@@ -235,8 +238,8 @@ export class Controller {
       ...(args.tokenBudget !== undefined ? { tokenBudget: args.tokenBudget } : {}) }
       : args.action === 'clear' ? { threadId: args.threadId }
       : { threadId: args.threadId, status: args.action === 'pause' ? 'paused' : 'active' };
-    await this.store.update(s => { s.operations[args.requestId] = { fingerprint, kind: 'goal',
-      phase: 'dispatching', threadId: args.threadId, action: args.action, priorGoal: observed.goal, priorOwnedGoalHash: this.goalOwnershipHash(observed.goal) }; });
+    await this.store.update(s => { s.operations[args.requestId] = { fingerprint, goalFingerprintVersion: 1, kind: 'goal',
+      phase: 'dispatching', threadId: args.threadId, action: args.action, priorGoal: goalMetadata(observed.goal), priorOwnedGoalHash: this.goalOwnershipHash(observed.goal) }; });
     let dispatched = false;
     try {
       await this.owned(args.threadId);
@@ -252,7 +255,7 @@ export class Controller {
       const result = { requestId: args.requestId, threadId: args.threadId, phase: 'accepted',
         nativeAcknowledged: true, observedDesiredState, goal: this.goalPreview(after?.goal), goalHash: after ? this.nativeGoalHash(after.goal) : null,
         atomicCompareAndSetAvailable: false, modelTurnStartedByConnector: false };
-      await this.store.update(s => { Object.assign(s.operations[args.requestId], { phase: 'accepted', result,
+      await this.store.update(s => { Object.assign(s.operations[args.requestId], { phase: 'accepted', result: { ...result, goal: goalMetadata(after?.goal) },
         ownedGoalHash: observedDesiredState && after ? this.goalOwnershipHash(after.goal) : null }); });
       return result;
     } catch (e) {

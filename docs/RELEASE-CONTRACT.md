@@ -87,6 +87,14 @@ open owned continuations block proof. Acknowledgment without observed closure
 does not retire earlier obligations. Confirmed closure receipts do not acquire
 later manual reactivation. Unresolved sends remain named ownership uncertainty. External goals are not adopted by a send.
 
+Native pause/completion observations retire only the matching owned goal operation;
+confirmed absence retires recorded goals with durable identity. Closure is retained
+across reconnect, while a later connector resume creates a new owned operation.
+Legacy stop summaries lack observed goal identity, so even a named closed item
+cannot grant durable closure. Missing or malformed fingerprints remain unknown.
+Goal journal migration removes objective bodies/previews and privately keys legacy
+request digests while preserving exact request replay. It does not purge backups.
+
 Expanded preflight, reconciliation, stop verification, status and both send
 rechecks use scoped proof. Each send rechecks fresh process and continuation
 state, the durable scope revision, connection epoch, target status, executor,

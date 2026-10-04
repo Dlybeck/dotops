@@ -10,14 +10,13 @@ async function setup(t) {
   await c.call('codex_chat_create', { requestId: R, repository: f.cwd, title: 'Control recovery' });
   return { f, get c() { return c; }, async reopen() { await c.close(); c = await Controller.open(options); } };
 }
-test('native goals can be paused and cleared explicitly with preserved prior state and idempotency', async t => {
+test('native goals can be paused and cleared explicitly with prior metadata and idempotency', async t => {
   const s = await setup(t); s.f.goal = { objective: 'Keep prior work', status: 'blocked', tokenBudget: null };
-  const prior = structuredClone(s.f.goal);
   const status = await s.c.call('codex_chat_status', { threadId: A });
   const pause = { requestId: randomUUID(), threadId: A, expectedGoalHash: status.admission.nativeGoalHash, action: 'pause' };
   assert.equal((await s.c.call('codex_chat_goal', pause)).observedDesiredState, true);
   assert.equal(s.f.goal.status, 'paused');
-  assert.deepEqual(s.c.store.state.operations[pause.requestId].priorGoal, prior);
+  assert.deepEqual(s.c.store.state.operations[pause.requestId].priorGoal, { status: 'blocked', tokenBudget: null, tokensUsed: null });
   await s.reopen();
   assert.equal((await s.c.call('codex_chat_goal', pause)).nativeAcknowledged, true);
   assert.equal(s.f.calls.filter(q => q.method === 'thread/goal/set').length, 1);

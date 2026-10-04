@@ -7,7 +7,12 @@ or permission approval mechanism. Do not expose its IPC socket or native control
 socket over a public network.
 
 The journal records exact request/turn/item/process evidence, not prompt bodies or
-command output. Status and native transcripts can contain private source, text,
+command output. Goal operations retain metadata and private keyed fingerprints;
+objective previews are transient and are omitted from replay receipts. On startup,
+legacy prior-goal bodies and accepted previews are removed from the current state
+when it is atomically rewritten. Existing backups and historical artifacts are not
+purged automatically and must remain private. Status and native transcripts can
+contain private source, text,
 paths and results. Keep journals, transcripts, context files and trial artifacts
 private. Empty context defaults require no persona or skill package. Native
 authentication and permissions remain native.

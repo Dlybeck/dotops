@@ -1,5 +1,6 @@
 import { fail } from '../safety.mjs';
 import { evaluateOwnedObligations, migrateOwnedObligations, validOwnershipId } from './owned-obligations.mjs';
+import { goalOperationClosed, retainGoalClosure, validGoalFingerprint } from './goal-records.mjs';
 
 export function ownedTurnIds(state, threadId) {
   return [...new Set(Object.values(state.operations).filter(op => op.kind === 'send' &&
@@ -24,11 +25,13 @@ function continuations(c, threadId, goal, queue) {
     for (let index = 0; index < operations.length; index++) {
       const [requestId, op] = operations[index];
       if (op.phase !== 'accepted' || !['set', 'resume'].includes(op.action)) continue;
-      const laterClosure = op.ownedGoalHash && operations.slice(index + 1).some(([, later]) =>
+      const identified = validGoalFingerprint(op.ownedGoalHash);
+      const laterClosure = identified && operations.slice(index + 1).some(([, later]) =>
         later.phase === 'accepted' && later.result?.observedDesiredState &&
         ['pause', 'clear', 'set'].includes(later.action) && later.priorOwnedGoalHash === op.ownedGoalHash);
-      const stopped = laterClosure || goal.goal === null || ['paused', 'complete'].includes(goal.goal.status);
-      const attributable = op.ownedGoalHash && op.ownedGoalHash === c.goalOwnershipHash(goal.goal);
+      const attributable = identified && op.ownedGoalHash === c.goalOwnershipHash(goal.goal);
+      const stopped = goalOperationClosed(op) || laterClosure || identified &&
+        (goal.goal === null || attributable && ['paused', 'complete'].includes(goal.goal.status));
       result.push({ kind: 'goal', requestId, state: stopped ? 'closed' : 'unknown',
         reason: stopped ? 'NATIVE_GOAL_CONTINUATION_STOPPED' : attributable ? 'OWNED_GOAL_CONTINUATION_OPEN' : 'GOAL_OWNERSHIP_AMBIGUOUS' });
     }
@@ -69,11 +72,22 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
     if (!owned?.fullItemsObserved) await c.repairOwnedTurn(threadId, turnId);
   }
   await c.store.tail;
-  const revision = scopeRevision(c.store.state, threadId, ignoreRequestId);
+  let revision = scopeRevision(c.store.state, threadId, ignoreRequestId);
   const inventory = await c.terminals(threadId);
   const goal = await c.optional('thread/goal/get', { threadId });
   const queue = await c.optional('thread/queue/list', { threadId, limit: 20 });
   const final = await c.owned(threadId);
+  await c.store.tail;
+  const observedContinuations = continuations(c, threadId, goal, queue);
+  const closures = observedContinuations.filter(item => item.kind === 'goal' && item.state === 'closed' &&
+    item.requestId && !goalOperationClosed(c.store.state.operations[item.requestId]));
+  if (closures.length && epoch === c.native.epoch && c.native.socket) await c.store.update(s => {
+    // The observation is bound to the exact accepted operations in this
+    // revision. Never mask a concurrent goal/send change with our own write.
+    if (revision !== scopeRevision(s, threadId, ignoreRequestId) || epoch !== c.native.epoch || !c.native.socket) return;
+    for (const item of closures) retainGoalClosure(s.operations[item.requestId], c.now(), 'scopedObservation');
+    revision = scopeRevision(s, threadId, ignoreRequestId);
+  });
   await c.store.tail;
   const proof = evaluateOwnedObligations(c.store.state.threads[threadId], ids, inventory, threadId);
   for (const [requestId, op] of Object.entries(c.store.state.operations)) if (requestId !== ignoreRequestId &&
