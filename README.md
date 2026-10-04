@@ -1,53 +1,70 @@
 # DotOps
 
-[Source](https://github.com/Dlybeck/dotops) ·
-[MIT license](LICENSE) · [Installation](docs/INSTALLATION.md) ·
-[Troubleshooting](docs/TROUBLESHOOTING.md)
+[Installation](docs/INSTALLATION.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) ·
+[MIT license](LICENSE)
 
-DotOps connects a coordinating conversation to local native Codex developer chats.
-Discover chats, read bounded latest-first history, create or enroll a local chat,
-send or steer requests, retrieve results and ordinary questions, and stop exact
-recorded work. Direct developer-chat interaction is optional for ordinary work.
+**Keep your dot in charge while Codex works on your configured machine.**
 
-Native settings, accounts, model/provider selection, sandbox and permissions stay
-native. DotOps adds no work windows, message-count limits, timed automatic stops,
-required personas or skills. Delivery acknowledgement, running work, completion,
-failure and uncertainty are separate states.
+DotOps helps your dot delegate coding work to the machine you've set up for it.
+You stay in your dot conversation to give direction, answer questions and review
+results. Your dot can send work, check progress and coordinate the next step
+through the supported native Codex runtime.
 
-## Who this is for
+It's for people who want their dot to orchestrate coding work in an existing
+project and environment, without constantly switching to a separate developer
+chat for ordinary coordination.
 
-Developers already using Codex locally who want an MCP-capable client to
-coordinate native chats while retaining native settings and permission controls.
-This experimental integration currently targets Linux; safe fixture verification
-is available without a Codex account, while live use needs a compatible native
-server setup.
+## What you get
 
-## How it fits together
+- **Delegate work from your dot.** Create a developer chat or explicitly enroll
+  an existing one on your configured machine.
+- **Keep the conversation together.** Your dot can retrieve progress and results,
+  bring back ordinary questions, and send follow-up direction.
+- **Control the work you started.** Steer or stop work sent through DotOps, with
+  completion and uncertainty reported separately.
+
+Once the connection is configured, the workflow is:
 
 ```mermaid
-flowchart TD
-  Client[Coordinating MCP client] -->|stdio| Bridge[DotOps MCP bridge]
-  subgraph Local[Same local OS user]
-    Bridge -->|control requests over private IPC| Watchdog[DotOps watchdog]
-    Bridge -->|discovery and history| Native[Authenticated Codex App Server]
-    Watchdog -->|private Unix WebSocket| Native
-    Watchdog --> Journal[Private ownership journal]
-    Native --> Chats[Native developer chats]
-    Owner[Native owner UI] -->|permissions and secret inputs| Native
-  end
+flowchart LR
+  Dot[Your dot] --> Work[Codex works on your configured machine]
+  Work --> Results[Progress, questions and results back to your dot]
 ```
 
-The MCP client launches the bridge; you run the watchdog separately. The journal
-retains ownership metadata, not prompt bodies. Native approvals stay in the owner
-UI. Optional context and skills require explicit configuration or selection.
+The machine must be available. Your dot decides when to check work and report
+back; DotOps does not install an automatic monitoring schedule. Native permission
+requests and secret inputs still need the supported Codex owner interface.
 
-## Quickstart: install and run safe tests
+## Optional developer and dot context
 
-This initial source release targets **Linux and Node 22** (22.23.3 is pinned in
-`.node-version`), with `/usr/bin/flock` and accessible `/proc/self/fd`.
-The fixture tests require no Codex account,
-credentials or native daemon. Live use requires an already authenticated local
-Codex App Server with the required experimental APIs and Unix WebSocket socket.
+You can supply separate private context for the developer chat and for your dot's
+coordination. Developer context accompanies the first observed-empty request;
+dot/controller context is offered for review before sending work.
+
+Both fields in [the optional template](context.example.json) are **blank by
+default**. There are no bundled personas, sample prompts or required skills.
+Configuration is private and explicit; see [context delivery](docs/CONTEXT-DELIVERY.md)
+and [optional skill selection](docs/SKILL-INVOCATION.md).
+
+## Get started
+
+This initial source release supports **Linux with a compatible native Codex
+runtime**. It does not connect arbitrary runtimes or configure your machine,
+accounts or permissions for you.
+
+1. **Verify the source safely.** The commands below install dependencies and run
+   fixtures without a Codex account or real model work.
+2. **Prepare the machine and connection.** Follow [installation](docs/INSTALLATION.md)
+   for native prerequisites, running DotOps and client configuration. For your dot,
+   also follow [the private remote-connection guidance](docs/INSTALLATION.md#remote-and-background-operation).
+3. **Give your dot a scoped task.** Once connected, it can delegate work and use
+   the [coordinating flow](docs/COORDINATING-FLOW.md) to retrieve results or ask for
+   further direction. Native settings and permissions remain native.
+
+### Install and verify without live work
+
+Use Node **22** (`.node-version` pins 22.23.3), `/usr/bin/flock` and accessible
+`/proc/self/fd`:
 
 ```sh
 git clone https://github.com/Dlybeck/dotops.git
@@ -58,66 +75,34 @@ npm ci --ignore-scripts
 npm test
 ```
 
-The tests use temporary journals, sockets and native fixtures. They do not send
-real model requests, grant native approvals or restart live services.
-See [installation and MCP configuration](docs/INSTALLATION.md) before live use.
-The package keeps its legacy `codex-dot-connector` name and `private: true`; this
-is a source release, not an npm package publication.
-
-## Live setup: connect a coordinating client
-
-Before continuing, authenticate Codex through its native client and confirm that
-your installation exposes the compatible local control socket. **This repository
-does not provide a verified universal native-server/socket bootstrap.** An
-ordinary stdio-only App Server does not satisfy this transport requirement.
-See [native prerequisites and setup boundaries](docs/INSTALLATION.md#native-server-prerequisite).
-
-For a new installation, run one control process from this checkout:
-
-```sh
-node src/stage1/watchdog.mjs --access-mode user-directories
-```
-
-Then configure an MCP client to launch `node` with the absolute path to
-`src/expanded/server.mjs`, using stdio. The watchdog and bridge share the default
-private journal/socket under `$HOME/Projects/codex-dot-connector/var/stage1`.
-The existing native socket is
-`$HOME/.codex/app-server-control/app-server-control.sock`. DotOps does not start
-or reconfigure the native daemon. If a watchdog already owns that journal, review
-its deployment before replacing it; never start a second writer.
-
-This command runs in the foreground; it does not install a background service.
-Remote clients need a separately configured supported transport or tunnel; DotOps
-does not provision one. Keep native/control sockets private. See
-[remote and background operation](docs/INSTALLATION.md#remote-and-background-operation).
-
-For discovery and history alone, use `src/server.mjs`. `npm start` launches that
-entrypoint, not a watchdog. Expanded control supports accessible canonical local
-directories, including non-Git folders, after explicit creation/enrollment.
-Legacy Stage1 retains restricted project-directory and descendant-tree safeguards.
+Tests use temporary journals, sockets and native fixtures. They do not send real
+model requests, grant native approvals or restart live services. The package
+retains its legacy `codex-dot-connector` name and `private: true`; this is a source
+release, not an npm publication.
 
 ## First request
 
-1. Call `codex_chat_create` with a fresh UUID `requestId`, canonical absolute
-   `repository` directory and `title`. This creates a chat without a model turn.
-2. Read `codex_chat_status` for the returned `threadId`.
-3. Call `codex_chat_send` with a stable UUID `requestId`, that `threadId`, `text`,
-   the status `latestTurnId` as `expectedLastTurnId` (null when empty), and
-   `acknowledgeConcurrentStartRisk: true`.
-4. Inspect status and bounded history for delivery and results. Unknown delivery
-   requires reconciliation; reuse the same request ID instead of duplicating work.
-5. Steer with the exact recorded `expectedTurnId`; stop with the exact owned
-   `turnId`. A stop acknowledgement is separate from verified closure.
+For the exact tool names, request identities and start/steer/stop checks, use
+[the first-request reference](docs/COORDINATING-FLOW.md#first-request). These are
+instructions for your coordinating agent or an integration author; you do not
+need to manage those identifiers in ordinary dot conversation.
 
-Optional private context is empty by default. The `developer` field supplies
-project context to the first observed-empty chat request; `tpm` supplies context
-for the coordinating caller to review before sending. Fill a private copy of
-the blank `context.example.json` and select it with `--context-file`; see
-[configuration and delivery details](docs/CONTEXT-DELIVERY.md).
-If TPM context is configured, send first returns preparation without delivery;
-review it and use its `preparationId` with a new send request ID. See
-[skill invocation](docs/SKILL-INVOCATION.md) and
-[the full coordinating flow](docs/COORDINATING-FLOW.md). No skill package is required.
+## Setup and technical reference
+
+| Need | Guide |
+| --- | --- |
+| Native prerequisites, local startup and MCP client configuration | [Installation](docs/INSTALLATION.md) |
+| Connecting your dot remotely and running in the background | [Remote and background operation](docs/INSTALLATION.md#remote-and-background-operation) |
+| Tool-level coordination and reconnect recovery | [Coordinating flow](docs/COORDINATING-FLOW.md) |
+| Optional private context and explicit skills | [Context](docs/CONTEXT-DELIVERY.md) · [Skills](docs/SKILL-INVOCATION.md) |
+| Implementation diagram and control paths | [Architecture reference](docs/INSTALLATION.md#architecture-reference) |
+| An error or blocked request | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+
+Local MCP clients can also use the stdio entrypoints described in installation.
+The native server, watchdog and client connection are distinct setup steps.
+There is no automatic service installation or live-source replacement. Restricted
+legacy Stage1 and expanded user-directory modes retain their respective safeguards;
+see installation before choosing an entrypoint.
 
 ## Safety and validation limits
 
