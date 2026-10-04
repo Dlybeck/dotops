@@ -1,9 +1,0 @@
-node_modules
-.reports/.run-timing/
-.dotops/
-.env
-.env.*
-var/
-
-context.json
-context.*.private.json
