@@ -1,0 +1,1184 @@
+{
+  "purpose": "Synthetic three-thread fork topology; identifiers and equality fingerprints are generated, no transcript content or native identities.",
+  "rootId": "00000000-0000-4000-8000-000000000001",
+  "nodes": [
+    {
+      "thread": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "parentThreadId": null,
+        "forkedFromId": null
+      },
+      "turns": [
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000003",
+              "type": "userMessage",
+              "sha256": "c36a16ba29926e89c527cbff5aed96b1d891612bb069c00ae04c0f52bae775ca"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000004",
+              "type": "agentMessage",
+              "sha256": "622e1e1f8e0969b6325c8bd9c338882f356f1cf3ac969685a01bfff50bc9cd83"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000005",
+              "type": "contextCompaction",
+              "sha256": "08f583e964790ffe6acbfe1a2661f6317b2d56105847d489387e9793b82a06a8"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000006",
+              "type": "agentMessage",
+              "sha256": "78a018441deda7e95781de74f42e90fc1dbed70d2d306c81c800dc51822b34d8"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000007",
+              "type": "subAgentActivity",
+              "sha256": "e4264fd182c7f6cc284842431995d8fb63179ecf602d4fe3dc26377c7f5f7d57"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000008",
+              "type": "subAgentActivity",
+              "sha256": "aca695fe70622457cfc46fb03c9a32b5da494d32e3a907b39b2bfbf8202b41b4"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000009",
+              "type": "agentMessage",
+              "sha256": "03a2c50afbd8e4abadc6536fb940e2d828e91e1710678a8c7095beb747a339d8"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000a",
+              "type": "subAgentActivity",
+              "sha256": "3f3c4a9a7b83ae878b7aeaf138e5ed81061154e9fce2a48bbfc3e6d35185de6f"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000b",
+              "type": "subAgentActivity",
+              "sha256": "ab68ea273fe70e9374710ecca053ca77bcb32f38c3e48270b97cb2c6fbcf499f"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000c",
+              "type": "subAgentActivity",
+              "sha256": "8b6d7d309be62758fe85847db8b1d64d6f6290e7a202f44031c1ad5c9f335f33"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000d",
+              "type": "subAgentActivity",
+              "sha256": "b73130f83e3fde51ce272c54055f3afbcee98eecd8224357c6fd247f8535d0ac"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000e",
+              "type": "agentMessage",
+              "sha256": "0ac78b4e510da6381c51c625f49e489a3220d33054c00f52089dd537628307d6"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000f",
+              "type": "subAgentActivity",
+              "sha256": "652b21a608a1aad5a1d7b4724b0cf6dac0dc49533504521b0a1a974a886dd346"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000010",
+              "type": "subAgentActivity",
+              "sha256": "69c5ff9316d1c28c88a3c573e027e6b1d368006a28666e4e5497279c8bc17bc0"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000011",
+              "type": "subAgentActivity",
+              "sha256": "f767247ebfefffdba373431028d0c88b86447c1e102a0a0103dc4494206e9b86"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000012",
+              "type": "subAgentActivity",
+              "sha256": "51d530b22d374b2033fddb80da4f5710e71f3928d552507c707b9d926e87d00d"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000013",
+              "type": "subAgentActivity",
+              "sha256": "d6d02d53bfc3357186bd5b20ea85737b300942c2b52fa8da6039c1a6ba21b537"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000014",
+              "type": "subAgentActivity",
+              "sha256": "c5a36ebe2749dae7bb1a4af2360fab3cfffdf6102bb7c594527525e0eb0305d7"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000015",
+              "type": "subAgentActivity",
+              "sha256": "5fef95444af3e80f3bf8c0765dee9916402b5162fcaf2b04a34cedbb21b883ae"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000016",
+              "type": "subAgentActivity",
+              "sha256": "32e8b39bd4698415ae3c19664c5083bb2c2cca96d3b343d7cd4e614dcb689ce9"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000017",
+              "type": "subAgentActivity",
+              "sha256": "433321d8d08cc58fffe89e6d8ca353374dc78918761b6dc0ca3e023a55fb049f"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000018",
+              "type": "subAgentActivity",
+              "sha256": "c0e7c68466f95c5243709cb66da27aed236d47cd3450434aa0564859cba9125f"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000019",
+              "type": "agentMessage",
+              "sha256": "aab83b4651ab3a2d53d59499ef5348878f83ae99b9a26548915603e63d22bba1"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000001a",
+              "type": "agentMessage",
+              "sha256": "5740998a16e12c89bef6f38bbaf05664539e5b7131a07f7d693be4b421a38f82"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-000000000007",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000008",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000a",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000b",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000c",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000d",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000000f",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000010",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000011",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000012",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000013",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000014",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000015",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000016",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000017",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000018",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000001d",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000001e",
+              "type": "userMessage",
+              "sha256": "e8deb8e01d9847db7b7d392f7517fe8c13365e436b195541d48b296a4414ec4a"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000001f",
+              "type": "agentMessage",
+              "sha256": "ebd20a3b1287939397116ed217e9bbcd9bf31aafeed7d7b395eda64719ae16dc"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000021",
+              "type": "userMessage",
+              "sha256": "c8888329a0044dcca98a12de42991b67e3d8decf9830ab0a7539a82b47fd2d5f"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000022",
+              "type": "agentMessage",
+              "sha256": "94b7136a4089d294fd66663b04eeea7e3d8daf3099c7489cf37a8ad54a803877"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000023",
+              "type": "agentMessage",
+              "sha256": "53b422f747cf7751b8f205d29a0bcf80fad30e6699680ea4217ac46815cb8579"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000024",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000025",
+              "type": "userMessage",
+              "sha256": "e267dd7a1c54436a45a4f2b1d2e5f51c0f97a389d4d003b050a7f78963dc988d"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000026",
+              "type": "agentMessage",
+              "sha256": "65a7ccf38d3f0d2e8d5bc96c6418275c9685df8cced954aa5227cbde9702b222"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000027",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000028",
+              "type": "userMessage",
+              "sha256": "cea0cb75b0314f8678ebf940cc154e704b0e23aab0391c42abb1b96f8b541dae"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000029",
+              "type": "agentMessage",
+              "sha256": "8a034ef15914ce2d15e8d93ef2f22e0a0fc1318c05b89bed972601679f287ccc"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000002a",
+              "type": "agentMessage",
+              "sha256": "619a1fa022c15885c9f978a1f05507b1984de10bc108a903552906bb0ba42f32"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000002b",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000002c",
+              "type": "userMessage",
+              "sha256": "db70f7827475bef9dc4251535b977531a09a55256c99bd91b2abb9b4591e31dc"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000002d",
+              "type": "agentMessage",
+              "sha256": "2f6290cd97f2e70c70f965cd4546251a4c98d32c9e3520a39ff4e891597e41cb"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000002e",
+              "type": "mcpToolCall",
+              "sha256": "06d449e2f3a31c7b097465ea74bd0f9814ecf1d9a049750fa48dc2f767c2f86b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000002f",
+              "type": "mcpToolCall",
+              "sha256": "77d32a421437485e8b06ebfb546be2854d4ae6ef3197ba5e7f60a276a984901c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000030",
+              "type": "agentMessage",
+              "sha256": "37102d004c236e94b60e6355fa6301da14c69f7572cf653c6e39d87e150eac81"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000031",
+              "type": "agentMessage",
+              "sha256": "38bab5047f941af5c1a189929ba600a869656133769d0d4d5e0fa1123ab7ca66"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000032",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000033",
+              "type": "userMessage",
+              "sha256": "7197e98f522bb16f71e98189f07ce9fd1dc6ce4ef0323decb187af10c3285f9b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000034",
+              "type": "reasoning",
+              "sha256": "a4474de9749c790442bd555abf5e67093f83557cdd53933d366e567a1ba86bd3"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000035",
+              "type": "agentMessage",
+              "sha256": "acefc9863253ebac8b88e944dae7ec6bd664b752189422d7eadf9b7e15e50b46"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000036",
+              "type": "subAgentActivity",
+              "sha256": "d7d936758f94450cd250e8b75c79f5727958b0ca0f752bced26a924b9fb8e6c0"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000037",
+              "type": "subAgentActivity",
+              "sha256": "8a2b73c78031e780f58ea0f79cb2994fc90cc8a5a600415f6b0a82a3d582dd50"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000038",
+              "type": "subAgentActivity",
+              "sha256": "80dda6752b413a7b5f3e53bd776a31eec72d88f27c8aaea7cec0a57296fe5a88"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000039",
+              "type": "agentMessage",
+              "sha256": "37a5e92ef2b30c0b84eb338fd362f4cbf7f2c0dd6ddb892ff64e20f234c8cf65"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000003a",
+              "type": "subAgentActivity",
+              "sha256": "2fe794a3fcf4ed301456a0f43b031062afd93404e551b9aeefad9b47e9fddb0d"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000003b",
+              "type": "agentMessage",
+              "sha256": "3be053d5d52d8b5099cc5921d00791d9efc62e8e63f6de37e05929f7b5f2f0b3"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000003c",
+              "type": "mcpToolCall",
+              "sha256": "2c3c19451afe41ee709faf100c800a09548ccd61363abdb2496d54b6b039825e"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000003d",
+              "type": "reasoning",
+              "sha256": "adea4fa9b08bc92024fe0145fb5bf282ea993a2a7b78dc173070a2844dabed27"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000003e",
+              "type": "agentMessage",
+              "sha256": "c671177587f4e60e6aa7900dff0727a880679cc7b71cbf4ad3a5151362547160"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-000000000036",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000037",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000038",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000003a",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000003f",
+          "status": "failed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000040",
+              "type": "userMessage",
+              "sha256": "baf4ffc89bef3377772dc9178bde4099eff0ca70ce8a9163d4a4e624ed016650"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000041",
+              "type": "agentMessage",
+              "sha256": "8c6b4090992b8b9a2fdcad9761be0657d08b53ed3a0fb14f22ced9c55a706a77"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000042",
+              "type": "agentMessage",
+              "sha256": "303a06644322d1088ba3923d918935281071fd741f0fd26b1165ebaa5df7631c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000043",
+              "type": "fileChange",
+              "sha256": "490667911b949ba379409da784aa1cd9654ce8e013214e14dd6dd6b75bb9fd63"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000044",
+              "type": "fileChange",
+              "sha256": "a9ed436607e26c08f2f6107b45835c13a33f81e0e0e5d7c9f50b8cbfc2a2c6e6"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000045",
+              "type": "fileChange",
+              "sha256": "e7aa368cbd3288aa923cbb1c8ab8f4cb318ca56afb427e0b5241366849afb6e4"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000046",
+              "type": "userMessage",
+              "sha256": "bc8cde2396baaee74126327f8393eeded8aebc02c98d0855535a0e893a1163fa"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000047",
+              "type": "agentMessage",
+              "sha256": "9ebe1aedd08ef97a895a56a6b8189ce7dd587be089b6107710c731e748e36c80"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000048",
+              "type": "agentMessage",
+              "sha256": "4dca42fe559622029712e8cd5667c63565c421373e65a7138cc2ab96170f9548"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000049",
+              "type": "fileChange",
+              "sha256": "5683c9bdc64d5ad8e0096e7978c3bbe0bdc8d4e5c65990a8493b9d61d6c456c9"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004a",
+              "type": "agentMessage",
+              "sha256": "1b86c373ab4bacff5450525f10f943271d45eb6e84aa59b24c6e0184c99bb256"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004b",
+              "type": "subAgentActivity",
+              "sha256": "5df23535c142c85b53ebc568b097636514086dad25d30828e228660f9dd6add5"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004c",
+              "type": "subAgentActivity",
+              "sha256": "e6a944e6223eda74f741517fe1f9be01c80e131d87436a4c08b4804353878ee8"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004d",
+              "type": "subAgentActivity",
+              "sha256": "c3a5a270430bf8d14d793f83b27c6fab7064a414fdf6c926fce209262dea22c5"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004e",
+              "type": "agentMessage",
+              "sha256": "6d207826d7642613887f3ccd56b941f21a2b03101103563154b6d1ef373f037b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004f",
+              "type": "subAgentActivity",
+              "sha256": "3c22a4b11c109e624dd918cc33c1ea49014b96aaf274b0b22549578987760c01"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000050",
+              "type": "fileChange",
+              "sha256": "9cba00f5248376767e47b4b0a90571df08e364012763762a82c24f7de8c3b4f1"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000051",
+              "type": "userMessage",
+              "sha256": "f5e038d5f93a68167efcdeed940555fbe4184086c92311161c767520446c72b2"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-00000000004b",
+              "type": "subAgentActivity",
+              "kind": "started",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004c",
+              "type": "subAgentActivity",
+              "kind": "started",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004d",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004f",
+              "type": "subAgentActivity",
+              "kind": "completed",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001c"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000052",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000053",
+              "type": "userMessage",
+              "sha256": "b0faf9b430ea774fd8ff5d4f7188818e1735e08e56fc0c8e450568a6f10e34ab"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000054",
+              "type": "agentMessage",
+              "sha256": "00213e44063da94b3d974d11efe39735f2ff227f25ad493710ad43b9d7379f5e"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000055",
+              "type": "agentMessage",
+              "sha256": "5ff7361e767c18ceb026fcb9f89dd8daaf1d728ecdd7ec3adba8d7c5b9956382"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000056",
+              "type": "agentMessage",
+              "sha256": "10ee456f3f392b88c1d0b445507a510ae3bf584e1b7759dba9a656e018475ebd"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000057",
+              "type": "agentMessage",
+              "sha256": "c082d0731b7ccbdca0dec6ec1354fa6c542784946ea76c0cc9994a3ca3ba5aae"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000058",
+              "type": "agentMessage",
+              "sha256": "c0ffd1904a93c7b06e44fcca538363c8a44ca2d2fe0605ab60b4b26d3a81fb59"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000059",
+              "type": "fileChange",
+              "sha256": "a01f23262b837e31c5f50db7c2c3cf94f901eb94c0b7f5d118d1e326152e5544"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005a",
+              "type": "fileChange",
+              "sha256": "e016c85a32149e8e1c1471adb680c4a3c5c52028c055b8c81cc4b1a056997825"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005b",
+              "type": "userMessage",
+              "sha256": "afd9a66c17698293a96bdb4b0c40268d7402261615da505288ce9bcf0b4b0d09"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005c",
+              "type": "agentMessage",
+              "sha256": "a9ca81e4fdc29248926c57089829723e9360a57243f94eb847e5f1e7b68f1322"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005d",
+              "type": "agentMessage",
+              "sha256": "09ad1a87b6b906f90d7bc1841b5ea566862f6f9dfedb5e25f9586dfb2a19f9cd"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005e",
+              "type": "agentMessage",
+              "sha256": "1ba5519585937337350079a052e6a5b997bec0ef415f7328145bcf8e3b259912"
+            }
+          ],
+          "relationships": []
+        }
+      ]
+    },
+    {
+      "thread": {
+        "id": "00000000-0000-4000-8000-00000000001c",
+        "parentThreadId": "00000000-0000-4000-8000-000000000001",
+        "forkedFromId": "00000000-0000-4000-8000-000000000001"
+      },
+      "turns": [
+        {
+          "id": "00000000-0000-4000-8000-00000000005f",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000039",
+              "type": "agentMessage",
+              "sha256": "b50d0bbcbc37d1db3fe580b15ef264fdb100f56341ceef8bccac06acb2754724"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000060",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000035",
+              "type": "agentMessage",
+              "sha256": "8e1710b584b169e3096d82dc326a5127c76cfbc922ce9d547429a9f8414745ce"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000061",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000062",
+              "type": "subAgentActivity",
+              "sha256": "cff5bc279b3e23637abaea38cc17d0122f77a6a744d4a84b45e9ccd23b40166d"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000034",
+              "type": "agentMessage",
+              "sha256": "deadb7fd1c5bdacee1b258f4f43b0afa1d422be44590a70471be59b5033921e1"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-000000000062",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000063",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000064",
+              "type": "subAgentActivity",
+              "sha256": "35cd84f2906dd25b85672c6daceede0b9c8bf8e1de3cedd17529c0e6c589ed6a"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000033",
+              "type": "agentMessage",
+              "sha256": "4ca66005f42466437fb77f8a1a8f4d54c834ff678be7b74c87b85733671622fd"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-000000000064",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000065",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000051",
+              "type": "agentMessage",
+              "sha256": "e7c6cd7f10535024c1ef7f3bd41d4788e73c966af264b3690f94df44212884b3"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000066",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000067",
+              "type": "subAgentActivity",
+              "sha256": "20ce49034fdeb6aecca68bef4e808546cc5bea083f38e7ce45cbe395120c2ed6"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000068",
+              "type": "subAgentActivity",
+              "sha256": "e953d70b263c51fc2e3fabb57c10398de269e55dc5c25a4bea396793e2acc6fa"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004e",
+              "type": "agentMessage",
+              "sha256": "72a1b9b68e55eb642910ad7df65570946a96b53990030f9a3aa78acda2c364ba"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-000000000067",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000068",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000003f",
+          "status": "interrupted",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000040",
+              "type": "userMessage",
+              "sha256": "baf4ffc89bef3377772dc9178bde4099eff0ca70ce8a9163d4a4e624ed016650"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000041",
+              "type": "agentMessage",
+              "sha256": "8c6b4090992b8b9a2fdcad9761be0657d08b53ed3a0fb14f22ced9c55a706a77"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000042",
+              "type": "agentMessage",
+              "sha256": "303a06644322d1088ba3923d918935281071fd741f0fd26b1165ebaa5df7631c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000043",
+              "type": "fileChange",
+              "sha256": "490667911b949ba379409da784aa1cd9654ce8e013214e14dd6dd6b75bb9fd63"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000044",
+              "type": "fileChange",
+              "sha256": "a9ed436607e26c08f2f6107b45835c13a33f81e0e0e5d7c9f50b8cbfc2a2c6e6"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000045",
+              "type": "fileChange",
+              "sha256": "e7aa368cbd3288aa923cbb1c8ab8f4cb318ca56afb427e0b5241366849afb6e4"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000046",
+              "type": "userMessage",
+              "sha256": "bc8cde2396baaee74126327f8393eeded8aebc02c98d0855535a0e893a1163fa"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000047",
+              "type": "agentMessage",
+              "sha256": "9ebe1aedd08ef97a895a56a6b8189ce7dd587be089b6107710c731e748e36c80"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000048",
+              "type": "agentMessage",
+              "sha256": "4dca42fe559622029712e8cd5667c63565c421373e65a7138cc2ab96170f9548"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000049",
+              "type": "fileChange",
+              "sha256": "5683c9bdc64d5ad8e0096e7978c3bbe0bdc8d4e5c65990a8493b9d61d6c456c9"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004a",
+              "type": "agentMessage",
+              "sha256": "1b86c373ab4bacff5450525f10f943271d45eb6e84aa59b24c6e0184c99bb256"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004b",
+              "type": "subAgentActivity",
+              "sha256": "5df23535c142c85b53ebc568b097636514086dad25d30828e228660f9dd6add5"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-00000000004b",
+              "type": "subAgentActivity",
+              "kind": "started",
+              "agentThreadId": "00000000-0000-4000-8000-00000000001b"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000052",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000053",
+              "type": "userMessage",
+              "sha256": "b0faf9b430ea774fd8ff5d4f7188818e1735e08e56fc0c8e450568a6f10e34ab"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000054",
+              "type": "agentMessage",
+              "sha256": "00213e44063da94b3d974d11efe39735f2ff227f25ad493710ad43b9d7379f5e"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000055",
+              "type": "agentMessage",
+              "sha256": "5ff7361e767c18ceb026fcb9f89dd8daaf1d728ecdd7ec3adba8d7c5b9956382"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000056",
+              "type": "agentMessage",
+              "sha256": "10ee456f3f392b88c1d0b445507a510ae3bf584e1b7759dba9a656e018475ebd"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000057",
+              "type": "agentMessage",
+              "sha256": "c082d0731b7ccbdca0dec6ec1354fa6c542784946ea76c0cc9994a3ca3ba5aae"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000058",
+              "type": "agentMessage",
+              "sha256": "c0ffd1904a93c7b06e44fcca538363c8a44ca2d2fe0605ab60b4b26d3a81fb59"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000059",
+              "type": "fileChange",
+              "sha256": "a01f23262b837e31c5f50db7c2c3cf94f901eb94c0b7f5d118d1e326152e5544"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005a",
+              "type": "fileChange",
+              "sha256": "e016c85a32149e8e1c1471adb680c4a3c5c52028c055b8c81cc4b1a056997825"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005b",
+              "type": "userMessage",
+              "sha256": "afd9a66c17698293a96bdb4b0c40268d7402261615da505288ce9bcf0b4b0d09"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005c",
+              "type": "agentMessage",
+              "sha256": "a9ca81e4fdc29248926c57089829723e9360a57243f94eb847e5f1e7b68f1322"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005d",
+              "type": "agentMessage",
+              "sha256": "09ad1a87b6b906f90d7bc1841b5ea566862f6f9dfedb5e25f9586dfb2a19f9cd"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005e",
+              "type": "agentMessage",
+              "sha256": "1ba5519585937337350079a052e6a5b997bec0ef415f7328145bcf8e3b259912"
+            }
+          ],
+          "relationships": []
+        }
+      ]
+    },
+    {
+      "thread": {
+        "id": "00000000-0000-4000-8000-00000000001b",
+        "parentThreadId": "00000000-0000-4000-8000-000000000001",
+        "forkedFromId": "00000000-0000-4000-8000-000000000001"
+      },
+      "turns": [
+        {
+          "id": "00000000-0000-4000-8000-000000000069",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000039",
+              "type": "agentMessage",
+              "sha256": "49df46c74355386d01f9c6fb6d5aa084e6fb1b1b549645c755eebb4fdcd6fd91"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000006a",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000035",
+              "type": "agentMessage",
+              "sha256": "d3457dc10314ed84a442b8c2c271178e515f0653491efbf072adae58e8dd9350"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000006b",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000006c",
+              "type": "subAgentActivity",
+              "sha256": "efb6338080eb3fa26923c93981e8fe3cbfb70ad43af5fa0dd6007715e2762642"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000006d",
+              "type": "subAgentActivity",
+              "sha256": "42b47c3683a2dff51c0ea50898bbbdb8cdb39b8eba2ca4ba58c08d181aa0525d"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000034",
+              "type": "agentMessage",
+              "sha256": "4c06c33f391141711e2b0a4bcf1c0d7cd03af89df29fe4c1e2f075a83b68d26e"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-00000000006c",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000006d",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000006e",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-00000000006f",
+              "type": "subAgentActivity",
+              "sha256": "1d0f30bd41904ab5e83a3c2e75ace38f653efe4179055de6209eac854c0a97f7"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000033",
+              "type": "agentMessage",
+              "sha256": "f94974fe0f1b325079610064a821dfe7d13961f9e6d877a28b75bf24499ca5e7"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-00000000006f",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000070",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000071",
+              "type": "subAgentActivity",
+              "sha256": "21a06142051962d1e41d6a40094162fbbde4846ec3f85ea3562c17fe7d40ca4f"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000051",
+              "type": "agentMessage",
+              "sha256": "3630d5c5d4fa86bfcfc7ff7e712452770809365a378aee9ca4574f099799e076"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-000000000071",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000072",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000073",
+              "type": "subAgentActivity",
+              "sha256": "d6589b5533228c402236e4eecdb7169f9faf7c195321e7fab10a2efe6b6c2bd2"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000074",
+              "type": "subAgentActivity",
+              "sha256": "cac7873e4bfc0590e2d311f21fd5d043043aad9a7b27e8c64fd61019beac7aa2"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004e",
+              "type": "agentMessage",
+              "sha256": "d2d4589d0813603002406d602d091dc7070f6b7dda53333b0645d0d08612682a"
+            }
+          ],
+          "relationships": [
+            {
+              "id": "00000000-0000-4000-8000-000000000073",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000074",
+              "type": "subAgentActivity",
+              "kind": "interacted",
+              "agentThreadId": "00000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "00000000-0000-4000-8000-00000000003f",
+          "status": "interrupted",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000040",
+              "type": "userMessage",
+              "sha256": "baf4ffc89bef3377772dc9178bde4099eff0ca70ce8a9163d4a4e624ed016650"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000041",
+              "type": "agentMessage",
+              "sha256": "8c6b4090992b8b9a2fdcad9761be0657d08b53ed3a0fb14f22ced9c55a706a77"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000042",
+              "type": "agentMessage",
+              "sha256": "303a06644322d1088ba3923d918935281071fd741f0fd26b1165ebaa5df7631c"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000043",
+              "type": "fileChange",
+              "sha256": "490667911b949ba379409da784aa1cd9654ce8e013214e14dd6dd6b75bb9fd63"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000044",
+              "type": "fileChange",
+              "sha256": "a9ed436607e26c08f2f6107b45835c13a33f81e0e0e5d7c9f50b8cbfc2a2c6e6"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000045",
+              "type": "fileChange",
+              "sha256": "e7aa368cbd3288aa923cbb1c8ab8f4cb318ca56afb427e0b5241366849afb6e4"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000046",
+              "type": "userMessage",
+              "sha256": "bc8cde2396baaee74126327f8393eeded8aebc02c98d0855535a0e893a1163fa"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000047",
+              "type": "agentMessage",
+              "sha256": "9ebe1aedd08ef97a895a56a6b8189ce7dd587be089b6107710c731e748e36c80"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000048",
+              "type": "agentMessage",
+              "sha256": "4dca42fe559622029712e8cd5667c63565c421373e65a7138cc2ab96170f9548"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000049",
+              "type": "fileChange",
+              "sha256": "5683c9bdc64d5ad8e0096e7978c3bbe0bdc8d4e5c65990a8493b9d61d6c456c9"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000004a",
+              "type": "agentMessage",
+              "sha256": "1b86c373ab4bacff5450525f10f943271d45eb6e84aa59b24c6e0184c99bb256"
+            }
+          ],
+          "relationships": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000052",
+          "status": "completed",
+          "items": [
+            {
+              "id": "00000000-0000-4000-8000-000000000053",
+              "type": "userMessage",
+              "sha256": "b0faf9b430ea774fd8ff5d4f7188818e1735e08e56fc0c8e450568a6f10e34ab"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000054",
+              "type": "agentMessage",
+              "sha256": "00213e44063da94b3d974d11efe39735f2ff227f25ad493710ad43b9d7379f5e"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000055",
+              "type": "agentMessage",
+              "sha256": "5ff7361e767c18ceb026fcb9f89dd8daaf1d728ecdd7ec3adba8d7c5b9956382"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000056",
+              "type": "agentMessage",
+              "sha256": "10ee456f3f392b88c1d0b445507a510ae3bf584e1b7759dba9a656e018475ebd"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000057",
+              "type": "agentMessage",
+              "sha256": "c082d0731b7ccbdca0dec6ec1354fa6c542784946ea76c0cc9994a3ca3ba5aae"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000058",
+              "type": "agentMessage",
+              "sha256": "c0ffd1904a93c7b06e44fcca538363c8a44ca2d2fe0605ab60b4b26d3a81fb59"
+            },
+            {
+              "id": "00000000-0000-4000-8000-000000000059",
+              "type": "fileChange",
+              "sha256": "a01f23262b837e31c5f50db7c2c3cf94f901eb94c0b7f5d118d1e326152e5544"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005a",
+              "type": "fileChange",
+              "sha256": "e016c85a32149e8e1c1471adb680c4a3c5c52028c055b8c81cc4b1a056997825"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005b",
+              "type": "userMessage",
+              "sha256": "afd9a66c17698293a96bdb4b0c40268d7402261615da505288ce9bcf0b4b0d09"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005c",
+              "type": "agentMessage",
+              "sha256": "a9ca81e4fdc29248926c57089829723e9360a57243f94eb847e5f1e7b68f1322"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005d",
+              "type": "agentMessage",
+              "sha256": "09ad1a87b6b906f90d7bc1841b5ea566862f6f9dfedb5e25f9586dfb2a19f9cd"
+            },
+            {
+              "id": "00000000-0000-4000-8000-00000000005e",
+              "type": "agentMessage",
+              "sha256": "1ba5519585937337350079a052e6a5b997bec0ef415f7328145bcf8e3b259912"
+            }
+          ],
+          "relationships": []
+        }
+      ]
+    }
+  ]
+}
