@@ -1,5 +1,10 @@
 # Optional context delivery
 
+The optional `developer` field supplies project context to the first
+observed-empty request. The `tpm` field supplies context for the coordinating
+caller to review before sending. The shipped template contains blank fields,
+with no personal prompts or personas.
+
 No configuration file is loaded by default. Both instruction bodies default to
 empty strings. Copy context.example.json to an absolute private file, keep it
 owned by the runtime OS user with mode 0600, and select it explicitly with the

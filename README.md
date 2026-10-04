@@ -14,17 +14,45 @@ native. DotOps adds no work windows, message-count limits, timed automatic stops
 required personas or skills. Delivery acknowledgement, running work, completion,
 failure and uncertainty are separate states.
 
-## Install and verify
+## Who this is for
+
+Developers already using Codex locally who want an MCP-capable client to
+coordinate native chats while retaining native settings and permission controls.
+This experimental integration currently targets Linux; safe fixture verification
+is available without a Codex account, while live use needs a compatible native
+server setup.
+
+## How it fits together
+
+```mermaid
+flowchart TD
+  Client[Coordinating MCP client] -->|stdio| Bridge[DotOps MCP bridge]
+  subgraph Local[Same local OS user]
+    Bridge -->|control requests over private IPC| Watchdog[DotOps watchdog]
+    Bridge -->|discovery and history| Native[Authenticated Codex App Server]
+    Watchdog -->|private Unix WebSocket| Native
+    Watchdog --> Journal[Private ownership journal]
+    Native --> Chats[Native developer chats]
+    Owner[Native owner UI] -->|permissions and secret inputs| Native
+  end
+```
+
+The MCP client launches the bridge; you run the watchdog separately. The journal
+retains ownership metadata, not prompt bodies. Native approvals stay in the owner
+UI. Optional context and skills require explicit configuration or selection.
+
+## Quickstart: install and run safe tests
 
 This initial source release targets **Linux and Node 22** (22.23.3 is pinned in
 `.node-version`), with `/usr/bin/flock`. The fixture tests require no Codex account,
 credentials or native daemon. Live use requires an already authenticated local
-Codex App Server with the required experimental APIs.
+Codex App Server with the required experimental APIs and Unix WebSocket socket.
 
 ```sh
 git clone https://github.com/Dlybeck/dotops.git
 cd dotops
 node --version
+test -x /usr/bin/flock
 npm ci --ignore-scripts
 npm test
 ```
@@ -35,7 +63,13 @@ See [installation and MCP configuration](docs/INSTALLATION.md) before live use.
 The package keeps its legacy `codex-dot-connector` name and `private: true`; this
 is a source release, not an npm package publication.
 
-## Connect a coordinating client
+## Live setup: connect a coordinating client
+
+Before continuing, authenticate Codex through its native client and confirm that
+your installation exposes the compatible local control socket. **This repository
+does not provide a verified universal native-server/socket bootstrap.** An
+ordinary stdio-only App Server does not satisfy this transport requirement.
+See [native prerequisites and setup boundaries](docs/INSTALLATION.md#native-server-prerequisite).
 
 For a new installation, run one control process from this checkout:
 
@@ -50,6 +84,11 @@ The existing native socket is
 `$HOME/.codex/app-server-control/app-server-control.sock`. DotOps does not start
 or reconfigure the native daemon. If a watchdog already owns that journal, review
 its deployment before replacing it; never start a second writer.
+
+This command runs in the foreground; it does not install a background service.
+Remote clients need a separately configured supported transport or tunnel; DotOps
+does not provision one. Keep native/control sockets private. See
+[remote and background operation](docs/INSTALLATION.md#remote-and-background-operation).
 
 For discovery and history alone, use `src/server.mjs`. `npm start` launches that
 entrypoint, not a watchdog. Expanded control supports accessible canonical local
@@ -69,9 +108,13 @@ Legacy Stage1 retains restricted project-directory and descendant-tree safeguard
 5. Steer with the exact recorded `expectedTurnId`; stop with the exact owned
    `turnId`. A stop acknowledgement is separate from verified closure.
 
-Optional private context is empty by default. If TPM context is configured, send
-first returns preparation without delivery; review it and use its `preparationId`
-with a new send request ID. See [context delivery](docs/CONTEXT-DELIVERY.md),
+Optional private context is empty by default. The `developer` field supplies
+project context to the first observed-empty chat request; `tpm` supplies context
+for the coordinating caller to review before sending. Fill a private copy of
+the blank `context.example.json` and select it with `--context-file`; see
+[configuration and delivery details](docs/CONTEXT-DELIVERY.md).
+If TPM context is configured, send first returns preparation without delivery;
+review it and use its `preparationId` with a new send request ID. See
 [skill invocation](docs/SKILL-INVOCATION.md) and
 [the full coordinating flow](docs/COORDINATING-FLOW.md). No skill package is required.
 
@@ -88,12 +131,15 @@ text and ordinary question answers are not owner consent. Native check-and-start
 is non-atomic. Tracked command leader exit does not guarantee that all detached
 OS descendants stopped. Ambiguous delegation grants no child-stop authority.
 
-The release passes 376 fixture tests and four bounded native core scenarios:
+The current candidate passes **387 fixture tests**. The earlier restored source
+passed four bounded native core scenarios:
 start/steer/replay/completion, owned command stop/reconnect, attributable delegation
 completion/reconnect/subsequent start, and later unowned work blocking admission
 while earlier own-stop remains verified. Actual **child unload was not observed**;
 that subcase remains fixture-backed. This is not production activation or
-universal compatibility evidence. See [validation](docs/VALIDATION.md),
+universal compatibility evidence. The goal privacy/closure fixes atop that source
+have fixture coverage; no new live/client acceptance is claimed for them.
+See [validation](docs/VALIDATION.md),
 [the release contract](docs/RELEASE-CONTRACT.md),
 [native approval integration](docs/APPROVAL-INTEGRATION.md) and [security](SECURITY.md).
 

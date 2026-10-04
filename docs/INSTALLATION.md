@@ -17,12 +17,23 @@ Pinned dependencies use the public npm registry. Scripts are disabled by default
 in `.npmrc`. Fixture tests create and remove their own temporary resources and
 need no credentials, running daemon, private context or model use.
 
+## Native server prerequisite
+
 Live control requires a running, authenticated local native Codex App Server
 whose experimental protocol supports this connector. The initial bounded native
 trial used threads reporting build 0.159.2. Version numbers alone do not prove
 compatibility; future builds may change or omit required evidence. Configure and
 authenticate Codex through its supported native client, outside DotOps. DotOps
 neither creates credentials nor changes sandbox, account or approval settings.
+
+The connector speaks WebSocket over a private Unix socket, defaulting to
+`$HOME/.codex/app-server-control/app-server-control.sock`. A stdio-only native
+server is insufficient. This repository does not include a verified universal
+command to create/authenticate that socket service on a clean machine. Provision
+it through your native installation's supported setup before attempting live
+control; if that transport or the required experimental APIs are unavailable,
+fixture verification still works but live setup is blocked. The watchdog's ready
+message confirms its local IPC listener, not native connectivity or compatibility.
 
 ## Default local installation
 
@@ -105,3 +116,17 @@ uses its own default native socket unless its backend is supplied programmatical
 Keep trial journals and context outside the source checkout. Never point a test
 controller at an existing production journal. Reconnecting to a preserved journal
 requires fresh evidence; prior status or acknowledgement is not start authority.
+
+## Remote and background operation
+
+The included MCP entrypoints use local stdio. A remote coordinating client needs
+a separately configured, authenticated transport supported by that client, or an
+existing secure tunnel to the runtime host. DotOps does not install a tunnel,
+HTTP endpoint, authentication service or public socket listener. Do not expose
+native or control sockets directly over a public network.
+
+The watchdog command above runs in a dedicated terminal until stopped. It does
+not install a systemd unit, arrange boot startup or replace an existing service.
+Service supervision, remote transport and any replacement of an active source
+are separate deployment/configuration decisions. Preserve the single-writer
+journal and review those steps for your installation before changing live state.
