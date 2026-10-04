@@ -1,5 +1,20 @@
 # Coordinating flow
 
+## First request
+
+1. Call `codex_chat_create` with a fresh UUID `requestId`, canonical absolute
+   `repository` directory and `title`. This creates a chat without a model turn.
+2. Read `codex_chat_status` for the returned `threadId`.
+3. Call `codex_chat_send` with a stable UUID `requestId`, that `threadId`, `text`,
+   the status `latestTurnId` as `expectedLastTurnId` (null when empty), and
+   `acknowledgeConcurrentStartRisk: true`.
+4. Inspect status and bounded history for delivery and results. Unknown delivery
+   requires reconciliation; reuse the same request ID instead of duplicating work.
+5. Steer with the exact recorded `expectedTurnId`; stop with the exact owned
+   `turnId`. A stop acknowledgement is separate from verified closure.
+
+## Detailed flow
+
 1. Discover or explicitly create/enroll a local root chat in the selected directory.
    Enrollment records no old turn ownership; creation starts no model turn.
 2. Read status to obtain the latest native turn ID, execution selection, native goal

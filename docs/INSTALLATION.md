@@ -36,6 +36,13 @@ control; if that transport or the required experimental APIs are unavailable,
 fixture verification still works but live setup is blocked. The watchdog's ready
 message confirms its local IPC listener, not native connectivity or compatibility.
 
+Supported native builds expose a Unix listener through `--listen unix://` or a
+custom `unix://PATH`, as described in the [official native command reference](https://learn.chatgpt.com/docs/developer-commands).
+The inspected 0.159.3 CLI also exposes daemon-management commands. Their
+availability does not verify startup, authentication or DotOps protocol
+compatibility on another installation; no bootstrap or daemon change is performed
+by the source installation commands above.
+
 ## Default local installation
 
 From the source checkout, start the control process in a dedicated terminal:
@@ -127,6 +134,14 @@ requires fresh evidence; prior status or acknowledgement is not start authority.
 
 ## Remote and background operation
 
+For your dot, use a supported, permitted plugin/MCP connection to this runtime.
+[OpenAI Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
+can forward a local stdio MCP server without making it publicly reachable. It
+requires a tunnel ID, runtime API key and the relevant Platform/workspace access;
+these are external setup steps, not credentials supplied by DotOps. Dot access to
+[connected apps](https://learn.chatgpt.com/docs/dots/computers-and-apps) remains
+subject to the connected account and permissions.
+
 The included MCP entrypoints use local stdio. A remote coordinating client needs
 a separately configured, authenticated transport supported by that client, or an
 existing secure tunnel to the runtime host. DotOps does not install a tunnel,
@@ -138,3 +153,22 @@ not install a systemd unit, arrange boot startup or replace an existing service.
 Service supervision, remote transport and any replacement of an active source
 are separate deployment/configuration decisions. Preserve the single-writer
 journal and review those steps for your installation before changing live state.
+
+## Architecture reference
+
+```mermaid
+flowchart TD
+  Client[Coordinating MCP client] -->|stdio| Bridge[DotOps MCP bridge]
+  subgraph Local[Same local OS user]
+    Bridge -->|control requests over private IPC| Watchdog[DotOps watchdog]
+    Bridge -->|discovery and history| Native[Authenticated Codex App Server]
+    Watchdog -->|private Unix WebSocket| Native
+    Watchdog --> Journal[Private ownership journal]
+    Native --> Chats[Native developer chats]
+    Owner[Native owner UI] -->|permissions and secret inputs| Native
+  end
+```
+
+The MCP client launches the bridge; you run the watchdog separately. The journal
+retains ownership metadata, not prompt bodies. Native approvals stay in the owner
+UI. Optional context and skills require explicit configuration or selection.
