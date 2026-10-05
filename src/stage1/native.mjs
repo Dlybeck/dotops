@@ -58,7 +58,7 @@ export class Native extends EventEmitter {
       // mutation has happened yet, so expiration here is known not-dispatched.
       if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
       try {
-        const result = await this.dispatch(method, limit === null ? params : { ...params, limit });
+        const result = await this.dispatch(method, limit === null ? params : { ...params, limit }, limit === null ? undefined : deadlineAt);
         if (limit !== null && Array.isArray(result.data) && result.data.length > limit) fail('INVALID_BACKEND_RESPONSE');
         return result;
       }
@@ -111,12 +111,14 @@ export class Native extends EventEmitter {
       socket.send(JSON.stringify({ method: 'initialized', params: {} }));
     } catch { this.drop(socket); fail('DAEMON_UNAVAILABLE'); }
   }
-  dispatch(method, params) {
+  dispatch(method, params, historyDeadlineAt) {
     if (this.closed || this.socket?.readyState !== WebSocket.OPEN) return Promise.reject(new SafeError('DAEMON_UNAVAILABLE'));
     if (this.pending.size >= 16) return Promise.reject(new SafeError('BUSY'));
     const socket = this.socket; const id = ++this.counter;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.drop(socket), this.timeoutMs);
+      const remaining = historyDeadlineAt === undefined ? this.timeoutMs : historyDeadlineAt - this.now();
+      const budgetLimited = historyDeadlineAt !== undefined && remaining <= this.timeoutMs;
+      const timer = setTimeout(() => this.drop(socket, budgetLimited ? 'HISTORY_READ_BUDGET_EXHAUSTED' : 'DAEMON_UNAVAILABLE'), Math.max(1, Math.min(this.timeoutMs, remaining)));
       this.pending.set(id, { resolve, reject, timer, method });
       socket.send(JSON.stringify({ id, method, params }), error => { if (error) this.drop(socket); });
     });

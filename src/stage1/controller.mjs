@@ -2,6 +2,7 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ProjectScope, UserDirectoryScope, SafeError, fail, safeText, Cursors } from '../safety.mjs';
 import { Native, uuid } from './native.mjs';
 import { Store } from './store.mjs';
@@ -70,16 +71,23 @@ export class Controller {
       validateWindows(c.store.state);
       const wallStart = Math.max(Date.now(), c.store.state.clockFloor ?? 0), monotonicStart = performance.now();
       c.now = now ?? (() => Math.max(Date.now(), wallStart + Math.floor(performance.now() - monotonicStart), c.store.state.clockFloor ?? 0));
+      c.historyReads = new AsyncLocalStorage();
       c.native = new Native({ socketPath, timeoutMs }); c.jobs = new Map(); c.chatJobs = new Map(); c.completionJobs = new Map(); c.subscribed = new Map(); c.descendantSubscriptions = new Map(); c.closing = false; c.questions = new Map(); c.localRequests = new Map(); c.deferredRequests = new Map();
       c.statusCursors = new Cursors(); c.observedUsage = new Map(); c.persistenceRetries = new Map(); c.nativeReviews = new Map(); c.native.now = c.now;
       c.store.onLost = () => { c.failed = true; c.native.close(); };
-      c.native.on('event', event => { try { c.event(event); } catch { /* Malformed notifications never grant control. */ } }); c.native.on('disconnect', () => { c.questions.clear(); c.localRequests.clear(); c.deferredRequests.clear(); c.nativeReviews.clear(); });
+      c.native.on('event', event => c.historyReads.run(undefined, () => { try { c.event(event); } catch { /* Malformed notifications never grant control. */ } })); c.native.on('disconnect', () => { c.questions.clear(); c.localRequests.clear(); c.deferredRequests.clear(); c.nativeReviews.clear(); });
       await c.store.update(s => { s.ownedContinuationKey ??= randomBytes(32).toString('hex'); migrateGoalRecords(s);
         for (const op of Object.values(s.operations)) if (op.phase === 'dispatching') op.phase = 'unknown'; });
       return c;
     } catch (e) { c.native?.close(); await c.store.close(); throw e; }
   }
   async call(name, raw) {
+    // All history traversal/repair in one control request shares a time budget
+    // below the IPC reply timeout. Concurrent requests and later native events
+    // must not inherit one another's deadlines.
+    return this.historyReads.run(this.now() + 5000, () => this.callWithHistoryBudget(name, raw));
+  }
+  async callWithHistoryBudget(name, raw) {
     if (this.failed) fail('STATE_LOCK_LOST');
     if (this.closing) fail('WATCHDOG_UNAVAILABLE');
     const parsed = inputs[name]?.safeParse(raw); if (!parsed?.success) fail('INVALID_INPUT'); const args = parsed.data;
@@ -471,9 +479,12 @@ export class Controller {
     }
     return result;
   }
-  async optional(method, params) {
-    try { return await this.native.request(method, params); }
-    catch (e) { if (['UNSUPPORTED_RPC', 'BACKEND_REJECTED'].includes(e.code)) return null; throw e; }
+  async optional(method, params, options) {
+    try { return await this.native.request(method, params, options); }
+    catch (e) {
+      if (options?.deadlineAt !== undefined && e.code === 'DEADLINE_EXPIRED') fail('HISTORY_READ_BUDGET_EXHAUSTED');
+      if (['UNSUPPORTED_RPC', 'BACKEND_REJECTED'].includes(e.code)) return null; throw e;
+    }
   }
   async startSnapshot(args) {
     const thread = await this.owned(args.threadId);
@@ -498,11 +509,12 @@ export class Controller {
   }
   async turns(threadId) {
     const result = [], cursors = new Set(), ids = new Set(); let cursor;
+    const deadlineAt = this.historyReads?.getStore() ?? this.now() + 5000;
     // Native may shrink an oversized page. Preserve the existing 60-turn
     // evidence budget rather than treating three smaller pages as all history.
     for (let page = 0; page < 60 && result.length < 60; page++) {
       const limit = Math.min(20, 60 - result.length);
-      const r = await this.optional('thread/turns/list', { threadId, limit, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
+      const r = await this.optional('thread/turns/list', { threadId, limit, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) }, { deadlineAt });
       if (!r) return { data: result, complete: false };
       if (!Array.isArray(r.data) || r.data.length > limit || r.data.some(t =>
         !validOwnershipId(t?.id) || ids.has(t.id))) fail('INVALID_BACKEND_RESPONSE');
@@ -558,11 +570,12 @@ export class Controller {
     this.ownTurn(threadId, turnId);
     await this.owned(threadId);
     const items = [], itemIds = new Set(), cursors = new Set();
+    const deadlineAt = this.historyReads?.getStore() ?? this.now() + 5000;
     let cursor, complete = false;
     for (let page = 0; page < 400 && items.length < 400; page++) {
       const limit = Math.min(20, 400 - items.length);
       const result = await this.optional('thread/items/list', { threadId, turnId, limit,
-        sortDirection: 'asc', ...(cursor ? { cursor } : {}) });
+        sortDirection: 'asc', ...(cursor ? { cursor } : {}) }, { deadlineAt });
       if (!result) break;
       if (!Array.isArray(result.data) || result.data.length > limit || result.data.some(entry =>
         entry?.turnId !== turnId || !validOwnershipId(entry.item?.id) || itemIds.has(entry.item.id))) fail('INVALID_BACKEND_RESPONSE');

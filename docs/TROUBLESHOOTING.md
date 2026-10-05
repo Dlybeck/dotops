@@ -11,6 +11,7 @@ Never erase a journal or clear a native goal just to make admission pass.
 | `UNSAFE_STATE_DIRECTORY` / `UNSAFE_CONTROL_SOCKET` | Owner, mode, canonical directory or socket checks failed. Verify your intended private directory is owned by the runtime user with mode0700 and socket0600; do not broaden permissions. |
 | `DAEMON_UNAVAILABLE` | Native transport is unavailable. Check the native client and configured socket; DotOps does not start or reconfigure it. |
 | `NATIVE_RESPONSE_TOO_LARGE` | One native history record exceeds the bounded transport after paging reaches one record. History remains unavailable; no complete-history or closure proof is granted. Preserve the request and journal and report the unsupported record size. Restarting or resending cannot make that record fit. |
+| `HISTORY_READ_BUDGET_EXHAUSTED` | Paged history could not finish within the shared five-second control-request budget. No complete-history proof is granted. Inspect the native history latency and retain the original request; do not blindly resend. |
 | Unknown with `TURN_ORIGIN_UNVERIFIED` | Acknowledgement may precede attributable user-message history. Read status after new evidence arrives, then reuse the original request ID. Never blindly send a new ID. |
 | `CHAT_ACTIVE` / targetBusy | Current native work blocks a new start. Earlier owned-stop proof can still hold when the current work is manual and unowned. Use native controls for work DotOps does not own. |
 | `CHAT_CHANGED` | The expected last native turn is stale. Inspect the new activity and obtain a fresh status before deciding whether to send. |
@@ -35,6 +36,11 @@ The existing 60-turn and 400-item evidence budgets are retained across smaller
 pages. Only an explicit end cursor establishes complete history; malformed,
 repeated or exhausted pagination remains incomplete or rejected. Those budgets
 do not guarantee that all native history or every record can be read.
+All history traversals and item repairs in one control request share a five-second
+deadline, including page-size retries and reconnects. A read exceeding this time
+budget fails explicitly before the IPC reply window; partial reads cannot settle
+verification. Native events receive a fresh budget rather than a stale caller's
+deadline. Other native requests retain their existing timeout behavior.
 
 For a new bug, report version/commit, mode, redacted error code and a minimal
 synthetic reproduction through https://github.com/Dlybeck/dotops/issues. Omit
