@@ -157,9 +157,7 @@ export class Controller {
   }
   async owned(threadId) {
     const record = this.store.state.threads[threadId]; if (!record) fail('CHAT_NOT_OWNED');
-    this.requireHistoryBudget();
-    const { thread } = await this.native.request('thread/read', { threadId, includeTurns: false });
-    this.requireHistoryBudget();
+    const { thread } = await this.readNative('thread/read', { threadId, includeTurns: false });
     if (!thread || thread.id !== threadId || thread.parentThreadId) fail('OUT_OF_SCOPE');
     const observedCwd = await this.scope.cwd(thread.cwd).catch(() => null);
     if (observedCwd !== record.cwd) throw new SafeError('OUT_OF_SCOPE', { threadId, expectedCwd: record.cwd,
@@ -486,16 +484,23 @@ export class Controller {
     const deadlineAt = this.historyReads?.getStore();
     if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('HISTORY_READ_BUDGET_EXHAUSTED');
   }
-  async optional(method, params, options) {
+  async readNative(method, params, options) {
     this.requireHistoryBudget();
+    const deadlineAt = Math.min(this.historyReads?.getStore() ?? Infinity, options?.deadlineAt ?? Infinity);
     try {
-      const result = await this.native.request(method, params, options);
+      const result = await this.native.request(method, params, Number.isFinite(deadlineAt) ? { ...options, deadlineAt } : options);
       this.requireHistoryBudget();
       return result;
     }
     catch (e) {
       this.requireHistoryBudget();
-      if (options?.deadlineAt !== undefined && e.code === 'DEADLINE_EXPIRED') fail('HISTORY_READ_BUDGET_EXHAUSTED');
+      if (Number.isFinite(deadlineAt) && e.code === 'DEADLINE_EXPIRED') fail('HISTORY_READ_BUDGET_EXHAUSTED');
+      throw e;
+    }
+  }
+  async optional(method, params, options) {
+    try { return await this.readNative(method, params, options); }
+    catch (e) {
       if (['UNSUPPORTED_RPC', 'BACKEND_REJECTED'].includes(e.code)) return null; throw e;
     }
   }

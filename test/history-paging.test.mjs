@@ -47,7 +47,7 @@ test('single oversized history record reports unsupported size and never grants 
   const f = await fixture(t), c = await controller(t, f);
   history(f, 'thread/turns/list', [{ id: T, status: 'completed',
     items: [{ type: 'agentMessage', id: 'answer', text: 'x'.repeat(2100000) }] }]);
-  await assert.rejects(c.turns(A), { code: 'NATIVE_RESPONSE_TOO_LARGE' });
+  await assert.rejects(c.turns(A), { code: 'NATIVE_HISTORY_FRAME_UNVERIFIED' });
   assert.deepEqual(f.calls.filter(q => q.method === 'thread/turns/list').map(q => q.params.limit), [20, 10, 5, 2, 1]);
   assert.equal(f.calls.some(q => q.method === 'turn/start'), false);
 });
@@ -117,7 +117,7 @@ test('an oversized individual item cannot create a complete repair receipt', asy
   await c.call('codex_chat_create', { requestId: R, repository: f.cwd, title: 'History paging fixture' });
   await c.store.update(s => { s.operations[randomUUID()] = { kind: 'send', threadId: A, turnId: T, phase: 'accepted' }; });
   history(f, 'thread/items/list', [{ turnId: T, item: { type: 'agentMessage', id: 'large-item', text: 'x'.repeat(2100000) } }]);
-  await assert.rejects(c.repairOwnedTurn(A, T), { code: 'NATIVE_RESPONSE_TOO_LARGE' });
+  await assert.rejects(c.repairOwnedTurn(A, T), { code: 'NATIVE_HISTORY_FRAME_UNVERIFIED' });
   assert.notEqual(c.store.state.threads[A].ownedObligations?.turns?.[T]?.fullItemsObserved, true);
 });
 
@@ -200,7 +200,7 @@ test('successful paging cannot hide budget exhaustion in later status verificati
   assert.equal(f.calls.some(q => q.method === 'turn/start'), false);
 });
 
-for (const code of ['HISTORY_READ_BUDGET_EXHAUSTED', 'NATIVE_RESPONSE_TOO_LARGE']) {
+for (const code of ['HISTORY_READ_BUDGET_EXHAUSTED', 'NATIVE_HISTORY_FRAME_UNVERIFIED']) {
   test(`child verification preserves the explicit unsupported history error ${code}`, async () => {
     await assert.rejects(verifyChildren({ turns: async () => { throw Object.assign(new Error(code), { code }); } }, A, []), { code });
   });
@@ -349,4 +349,41 @@ test('final descendant inventory exhaustion stops the root ownership reread', as
   await assert.rejects(c.call('codex_chat_status', { threadId: A }), { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
   assert.deepEqual(afterExpiry, []);
   assert.equal(f.calls.some(q => q.method === 'turn/start'), false);
+});
+
+test('oversized unsolicited events cannot establish a history record size', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close()); await n.connect();
+  f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    socket.send(JSON.stringify({ method: 'item/completed', params: { threadId: B, turnId: T,
+      item: { type: 'agentMessage', text: 'x'.repeat(2100000) } } }));
+    return true;
+  };
+  await assert.rejects(n.request('thread/turns/list', { threadId: A, limit: 1, itemsView: 'full', sortDirection: 'desc' }), { code: 'NATIVE_HISTORY_FRAME_UNVERIFIED' });
+});
+
+test('ownership reconnect expiration stops before dispatching the ownership read', async t => {
+  const f = await fixture(t); let clock = Date.now();
+  const c = await Controller.open({ root: f.root, socketPath: f.socket, stateDir: f.dir + '/state', now: () => clock });
+  t.after(() => c.close());
+  await c.call('codex_chat_create', { requestId: R, repository: f.cwd, title: 'Ownership reconnect fixture' });
+  c.native.drop(c.native.socket); const start = f.calls.length;
+  f.handle = (socket, q) => { if (q.method === 'initialize') clock += 6000; };
+  await assert.rejects(c.call('codex_chat_status', { threadId: A }), { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  assert.deepEqual(f.calls.slice(start).map(q => q.method), ['initialize']);
+});
+
+test('nonhistory verification reads bound setup waiting to the remaining budget', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close());
+  f.handle = (socket, q) => {
+    if (q.method !== 'initialize') return;
+    setTimeout(() => { if (socket.readyState === 1) socket.send(JSON.stringify({ id: q.id, result: {} })); }, 300);
+    return true;
+  };
+  const start = Date.now();
+  await assert.rejects(n.request('thread/backgroundTerminals/list', { threadId: A, limit: 1 }, { deadlineAt: start + 100 }), { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  assert.ok(Date.now() - start < 250);
+  assert.equal(f.calls.some(q => q.method === 'thread/backgroundTerminals/list'), false);
 });

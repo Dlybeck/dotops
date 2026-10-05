@@ -136,7 +136,7 @@ export async function verifyChildren(c, rootId, turnIds, proof = {}) {
   } catch (e) {
     // Unsupported paging must stop the control request, rather than hiding its
     // budget/record-size failure and continuing native reads past the reply window.
-    if (['HISTORY_READ_BUDGET_EXHAUSTED', 'NATIVE_RESPONSE_TOO_LARGE'].includes(e.code)) throw e;
+    if (['HISTORY_READ_BUDGET_EXHAUSTED', 'NATIVE_HISTORY_FRAME_UNVERIFIED'].includes(e.code)) throw e;
     return 'unverified';
   }
 }

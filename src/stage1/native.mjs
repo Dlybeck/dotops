@@ -55,7 +55,7 @@ export class Native extends EventEmitter {
     for (;;) {
       if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
       const connection = this.connect();
-      if (limit !== null && deadlineAt !== undefined) {
+      if (deadlineAt !== undefined) {
         let timer;
         try {
           await Promise.race([connection, new Promise((_, reject) => {
@@ -67,16 +67,17 @@ export class Native extends EventEmitter {
       // mutation has happened yet, so expiration here is known not-dispatched.
       if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
       try {
-        const result = await this.dispatch(method, limit === null ? params : { ...params, limit }, limit === null ? undefined : deadlineAt);
-        if (limit !== null && deadlineAt !== undefined && this.now() >= deadlineAt) fail('HISTORY_READ_BUDGET_EXHAUSTED');
+        const result = await this.dispatch(method, limit === null ? params : { ...params, limit }, deadlineAt);
+        if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('HISTORY_READ_BUDGET_EXHAUSTED');
         if (limit !== null && Array.isArray(result.data) && result.data.length > limit) fail('INVALID_BACKEND_RESPONSE');
         return result;
       }
       catch (e) {
-        // Retry only bounded history reads, at the same cursor. Never replay a
-        // mutation or an ordinary disconnect. A single oversized record cannot
-        // be read safely through this API and remains explicitly unsupported.
-        if (limit === null || e.code !== 'NATIVE_RESPONSE_TOO_LARGE' || limit === 1) throw e;
+        // Retry only bounded history reads, at the same cursor. An unidentified
+        // oversized frame may also be an event. At limit one, report unsupported
+        // history transport without claiming which response or record caused it.
+        if (limit === null || e.code !== 'NATIVE_RESPONSE_TOO_LARGE') throw e;
+        if (limit === 1) fail('NATIVE_HISTORY_FRAME_UNVERIFIED');
         limit = Math.max(1, Math.floor(limit / 2));
         this.historyLimits.set(method, limit);
       }
