@@ -46,6 +46,10 @@ async function initializeStateDirectory(dir) {
 
 export class Store {
   static async open(dir) {
+    if (process.platform === 'darwin') {
+      const { MacStore } = await import('./platform/macos-store.mjs');
+      return MacStore.open(dir);
+    }
     const s = new Store(); s.dir = path.resolve(dir); s.tail = Promise.resolve();
     await initializeStateDirectory(s.dir);
     const d = await lstat(s.dir);

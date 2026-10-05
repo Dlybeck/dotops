@@ -7,3 +7,4 @@ var/
 
 context.json
 context.*.private.json
+native/build/

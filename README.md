@@ -89,6 +89,10 @@ need to manage those identifiers in ordinary dot conversation.
 
 ## Setup and technical reference
 
+The macOS journal backend is a development checkpoint, with Linux fixture
+coverage only. See [platform validation](docs/VALIDATION.md#macos-journal-backend-development-checkpoint)
+for its remaining gates; macOS host support is not yet claimed.
+
 | Need | Guide |
 | --- | --- |
 | Native prerequisites, local startup and MCP client configuration | [Installation](docs/INSTALLATION.md) |

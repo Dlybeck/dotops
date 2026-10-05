@@ -54,3 +54,58 @@ permissions, services or journals were modified by these checks.
 This evidence does not prove an authenticated coordinating-UI approval bridge,
 atomic native start, universal detached-process shutdown, phone/parent-client
 acceptance or production activation. See [the release contract](RELEASE-CONTRACT.md).
+
+## macOS journal backend development checkpoint
+
+The first portability slice adds a helper-backed Store with the existing
+`open/update/close` behavior and version-1 JSON state. Linux keeps its current
+implementation. The controller, ownership evaluator, goal model, tool schemas,
+private context and blank shipped context template are unchanged.
+
+`npm run test:macos-store` exercises private first/repeat initialization, unsafe
+paths/files/ACLs, hard links, identity replacement, writer contention, helper and
+parent death, bounded request/response framing, and controller goal privacy and
+closure across helper-backed commits/recovery. Linux-only syscall faults cover
+file sync, rename, directory sync and a crash before rename. A directory-sync
+failure may leave the new state committed without an acknowledgement; a crash
+may leave a private temporary file. Neither condition grants success or triggers
+automatic replay/cleanup. The helper receives state bytes over a private pipe
+and writes no payload diagnostics; model-layer privacy rules remain responsible
+for excluding prompt bodies from state.
+
+Linux POSIX fixture execution and cross-compilation against Darwin headers are
+separate from actual macOS execution. The next platform gate is an authorized
+Apple SDK/compiler build and real macOS filesystem tests, including extended ACLs,
+private file ownership, canonical temporary paths, path replacement and locking.
+Linux-only ACL and syscall-interposition tests are explicitly platform-specific.
+
+Executable trust is checked before helper launch, including ACLs on all ancestors
+and identity/metadata changes during the probe. A fixed system `osascript` bridge
+calls the Darwin ACL API; it does not trust the helper to validate itself. Linux
+fixtures exercise this script against a simulated C API and fixed-output process
+boundary, including unreadable ACLs, malformed tags, grants and iteration errors.
+They do not establish JXA pointer interoperability on a Mac. The shared native
+fixture canonicalizes its temporary root before socket binding; an aliased-root
+regression models macOS's `/tmp` versus `/private/tmp` distinction. Controller
+privacy/goal-closure integration is explicitly Linux-only until the other host
+seams are implemented.
+
+On a separately authorized Mac, the next gate is:
+
+1. Use an existing Node 22 installation, locked dependencies and Apple command-line
+   C compiler in a canonical protected checkout; build the helper from source.
+2. Run `npm run test:macos-store` as an ordinary user. Confirm both first/repeat
+   initialization and contention/crash recovery on real APFS temporary paths.
+3. Verify executable and ancestor grant ACLs are rejected before helper execution,
+   deny-only ACLs work, and unreadable ACLs fail closed. Confirm the fixed system
+   API bridge needs no application-automation grant on that macOS version.
+4. Record the OS/architecture/compiler, exact source commit, tests and any skipped
+   Linux-only cases. Stop on failures; do not strip existing ACLs to force a pass.
+
+These checks need no Codex login, live journal or service. Authenticated native
+acceptance belongs to the later complete foreground-host milestone.
+
+This checkpoint does not validate the complete macOS watchdog. Private context
+and control-socket ACL integration remain later slices, followed by separately
+approved authenticated start/steer/stop/reconnect acceptance using fresh test chats.
+No macOS foreground support, CI pass or personal-host setup is claimed yet.
