@@ -65,7 +65,7 @@ messages from waking followups: it stays ambiguous until attributable completion
 resolves it. No such observation grants child-stop authority or ownership of a
 child's newest turn. Missing receiver-turn causal receipts and overlapping inputs
 remain unknown outcomes. Current readiness separately permits a single native start followed by
-ambiguous interactions and an unclaimed matching reviewer lifecycle completion in fresh complete
+ambiguous interactions and an unclaimed matching delegated-agent lifecycle completion in fresh complete
 owned-turn history when each receiver passes fresh complete descendant/activity/continuation checks. Idle
 receivers require complete empty process inventory; unloaded receivers are not
 reattached. `currentReadiness.delegationReadiness` reports that snapshot, while

@@ -66,7 +66,7 @@ Terminal model status closes that model only. Known live native item/process
 pairs still block; unavailable inventory, null live handles, conflicting
 identities and incomplete exact-turn evidence retain named unknown obligations.
 Those historical results remain distinct from current readiness after an
-established local boot boundary or completed native reviewer lifecycle, as described below.
+established local boot boundary or completed native delegated-agent lifecycle, as described below.
 Legacy Stage1 tree and attachment safeguards remain conservative.
 
 Exact legacy turn receipts and command observations migrate without deleting
@@ -100,6 +100,39 @@ not a process-exit receipt or universal detached-process proof. Every send rerun
 these checks; no lifecycle readiness is retained as a durable closure.
 Unavailable, incomplete or malformed root-turn pagination cannot qualify cached lifecycle
 evidence as fresh; an existing bounded complete exact-turn item repair remains valid.
+
+### Native delegated-agent event semantics
+
+These cases depend on native event evidence, not an agent's role or the caller's
+development workflow. In the supported native multi-agent v2 path:
+
+| Activity kind | Native meaning | DotOps evidence boundary |
+| --- | --- | --- |
+| `started` | Agent creation emits a start activity for the receiver. | A launch observation; not proof of its request outcome or current inactivity. |
+| `interacted` | Messaging and follow-up share this activity kind. | Does not distinguish a queued message from a follow-up that triggers a turn. |
+| `completed` | A completed child turn can emit activity to its initiating parent turn when that association is available. | Child-turn lifecycle evidence; one completion does not prove every overlapping request's outcome. |
+
+Verified upstream reference: native Codex source at commit
+`402f5b6fdf28a7a72c153dbe6fe01e252205d7d6`, including
+[spawn](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/spawn.rs#L224-L234),
+[shared message/follow-up activity](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/message_tool.rs#L86-L96),
+and [terminal child-turn notification](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/agent/control/completion.rs#L50-L88).
+The shared message handler is called with
+[queue-only delivery](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/send_message.rs#L41-L49)
+or [turn-triggering delivery](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/followup_task.rs#L41-L49).
+This is a source reference for the observed event shape, not a guarantee for every
+native server version. DotOps does not infer ownership from an agent role,
+activity-ID naming pattern, ancestry or the child's latest turn.
+
+An ordinary unambiguous `started → completed` or `interacted → completed` pair
+uses the existing exact ordered-completion rule. With overlapping activities,
+interaction-only cycles or a single start followed by several interactions may
+instead qualify for current readiness while exact outcomes remain unknown.
+Interleaved receivers are matched by exact receiver identity. Repeated follow-up
+cycles require their own later completions and fresh current-state checks; a prior
+completion is not proof for later activity. Multiple starts sharing one receipt,
+conflicting identities and incomplete evidence remain blocking. None of these
+cases grants child-control authority or universal detached-process proof.
 
 Status exposes `ownedModel`, `ownedProcesses`, `ownedDelegations`,
 `ownedContinuations`, `unknownOwnedObligations` and `targetBusy`. Own-stop proof

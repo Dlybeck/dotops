@@ -6,90 +6,82 @@ import { fixture, A, R, T } from './stage1-fixture.mjs';
 
 const C = '55555555-5555-4555-8555-555555555555';
 const D = '66666666-6666-4666-8666-666666666666';
+const E = 'b4039b32-1661-4c35-9e0c-e09f7e621407';
+const F = '81de0edf-2c48-4da7-b610-ae7d0d8891be';
+const start = (id, agentThreadId) => ({ type: 'subAgentActivity', id, kind: 'started', agentThreadId });
 const interaction = (id, agentThreadId) => ({ type: 'subAgentActivity', id, kind: 'interacted', agentThreadId });
 const completion = (id, agentThreadId) => ({ type: 'subAgentActivity', id, kind: 'completed', agentThreadId });
 
-async function setup(t, { startedLifecycle = false } = {}) {
+async function setup(t, { startedLifecycle = false, activities, receivers = [C, D], descendantCount = receivers.length } = {}) {
   const f = await fixture(t), options = { accessMode: 'user-directories', socketPath: f.socket, stateDir: f.dir + '/state' };
   let c = await Controller.open(options); t.after(() => c.close());
   await c.call('codex_chat_create', { requestId: R, repository: f.cwd, title: 'Lifecycle fixture' });
-  await c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Review', expectedLastTurnId: null, acknowledgeConcurrentStartRisk: true });
+  await c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Execute task', expectedLastTurnId: null, acknowledgeConcurrentStartRisk: true });
   const root = f.threads.get(A), turn = root.turns[0];
   root.status = { type: 'idle' }; turn.status = 'completed'; turn.itemsView = 'full';
   turn.items.push(interaction('c1', C), interaction('d1', D), interaction('c2', C), interaction('d2', D),
     completion('c-done', C), interaction('d3', D), completion('d-done', D));
   if (startedLifecycle) turn.items.splice(1, turn.items.length - 1,
-    { type: 'subAgentActivity', id: 'c1', kind: 'started', agentThreadId: C },
+    start('c1', C),
     interaction('c2', C), completion('c-done', C));
-  for (const id of [C, D]) { const child = f.thread(id); child.parentThreadId = A; child.status = { type: 'notLoaded' }; f.threads.set(id, child); }
+  if (activities) turn.items.splice(1, turn.items.length - 1, ...activities);
+  for (const id of receivers) { const child = f.thread(id); child.parentThreadId = A; child.status = { type: 'notLoaded' }; f.threads.set(id, child); }
+  for (let i = receivers.length; i < descendantCount; i++) {
+    const child = f.thread(`77777777-7777-4777-8777-${String(i).padStart(12, '0')}`);
+    child.parentThreadId = A; child.status = { type: i % 2 ? 'idle' : 'notLoaded' }; f.threads.set(child.id, child);
+  }
   return { f, root, turn, get c() { return c; }, async restart() { await c.close(); c = await Controller.open(options); } };
 }
 
-test('started then interacted reviewer lifecycle admits after reconnect without closing either exact outcome', async t => {
-  // Synthetic counterpart of native started -> interacted -> completed history:
-  // one completion cannot establish the outcomes of two distinct operations.
-  const s = await setup(t, { startedLifecycle: true });
-  // Match the reported inventory size without publishing native identities.
-  for (let i = 0; i < 20; i++) {
-    const child = s.f.thread(`77777777-7777-4777-8777-${String(i).padStart(12, '0')}`);
-    child.parentThreadId = A; child.status = { type: 'notLoaded' }; s.f.threads.set(child.id, child);
-  }
-  const status = await s.c.call('codex_chat_status', { threadId: A });
-  assert.equal(status.admission.currentReadiness.ready, true);
-  assert.equal(status.admission.ownedDelegations.open, 2);
-  assert.ok(status.admission.ownedDelegations.items.every(x => x.state === 'unknown' && !x.childStopAuthorized));
-  assert.equal(status.admission.currentReadiness.delegationReadiness.unready, 0);
-  await s.restart();
-  const begin = s.f.calls.length;
-  const reconciled = await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A });
-  assert.equal(reconciled.phase, 'verified');
-  assert.equal(reconciled.historicalUnknowns.open, 2);
-  assert.deepEqual(reconciled.resumedDescendants, []);
-  const stopped = await s.c.call('codex_chat_stop', { requestId: randomUUID(), threadId: A, turnId: T });
-  assert.equal(stopped.verifiedStopped, false);
-  assert.equal(stopped.ownedDelegations.open, 2);
-  assert.equal(Object.keys(s.c.store.state.threads[A].ownedObligations.turns[T].delegationClosures ?? {}).length, 0);
-  assert.equal(s.f.calls.slice(begin).some(q => [C, D].includes(q.params?.threadId) &&
-    ['thread/resume', 'thread/items/list', 'thread/turns/list', 'turn/interrupt', 'thread/backgroundTerminals/terminate'].includes(q.method)), false);
-  s.f.handle = (socket, q) => {
-    if (q.method !== 'turn/start') return;
-    const turn = { id: randomUUID(), status: 'inProgress', items: [{ type: 'userMessage', id: 'next', clientId: q.params.clientUserMessageId, content: q.params.input }] };
-    s.root.turns.push(turn); s.root.status = { type: 'active' };
-    socket.send(JSON.stringify({ id: q.id, result: { turn } })); return true;
-  };
-  const sent = await s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true });
-  assert.equal(sent.phase, 'accepted');
-  assert.notEqual(sent.turnId, T);
-});
-
-function assertUnknownOutcomes(s, value) {
-  assert.equal(value.ownedDelegations.open, 5);
+function assertUnknownOutcomes(s, value, open = 5) {
+  assert.equal(value.ownedDelegations.open, open);
   assert.ok(value.ownedDelegations.items.every(x => x.state === 'unknown' && !x.childStopAuthorized));
   assert.equal(Object.keys(s.c.store.state.threads[A].ownedObligations.turns[T].delegationClosures ?? {}).length, 0);
 }
 
-test('completed reviewer lifecycles admit after reconnect while five exact interaction outcomes remain unknown', async t => {
-  const s = await setup(t);
-  let status = await s.c.call('codex_chat_status', { threadId: A });
+const lifecycleCases = [
+  { name: 'ordinary start/completion', receivers: [E], descendantCount: 1, open: 0,
+    activities: [start('launch:worker', E), completion('turn-finished:worker', E)] },
+  { name: 'single interaction/completion without a start', receivers: [F], descendantCount: 1, open: 0,
+    activities: [interaction('message:worker', F), completion('turn-done:worker', F)] },
+  { name: 'interleaved interaction-only lifecycles', receivers: [C, D], descendantCount: 2, open: 5 },
+  { name: 'start plus one interaction', receivers: [E], descendantCount: 22, open: 2,
+    activities: [start('job-start/1', E), interaction('message/1', E), completion('child-turn/1', E)] },
+  { name: 'start plus multiple interactions', receivers: [F], descendantCount: 67, open: 4,
+    activities: [start('run-80', F), interaction('input-81', F), interaction('input-82', F),
+      interaction('input-83', F), completion('finished-84', F)] },
+  { name: 'interleaved receivers with starts and multiple interactions', receivers: [E, F], descendantCount: 4, open: 6,
+    activities: [start('launch-left', E), interaction('left-input-1', E), start('launch-right', F),
+      interaction('right-input-1', F), interaction('left-input-2', E), completion('left-finished', E),
+      interaction('right-input-2', F), completion('right-finished', F)] },
+  { name: 'repeated completed follow-up cycles', receivers: [F], descendantCount: 3, open: 7,
+    activities: [start('initial-launch', F), interaction('initial-input-1', F), interaction('initial-input-2', F), completion('initial-finished', F),
+      interaction('next-input-1', F), interaction('next-input-2', F), completion('next-finished', F),
+      interaction('final-input-1', F), interaction('final-input-2', F), completion('final-finished', F)] },
+];
+
+for (const scenario of lifecycleCases) test(`delegated-agent ${scenario.name} admits after reconnect with exact outcomes preserved`, async t => {
+  const s = await setup(t, scenario);
+  const status = await s.c.call('codex_chat_status', { threadId: A });
   assert.equal(status.admission.currentReadiness.ready, true);
-  assertUnknownOutcomes(s, status.admission);
   assert.equal(status.admission.currentReadiness.delegationReadiness.unready, 0);
+  if (scenario.open) assertUnknownOutcomes(s, status.admission, scenario.open);
+  else assert.equal(status.admission.ownedDelegations.open, 0);
   await s.restart();
   const begin = s.f.calls.length;
   const reconciled = await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A });
   assert.equal(reconciled.phase, 'verified');
   assert.equal(reconciled.currentReadiness.ready, true);
-  assert.equal(reconciled.historicalUnknowns.open, 5);
+  assert.equal(reconciled.historicalUnknowns.open, scenario.open);
   assert.deepEqual(reconciled.resumedDescendants, []);
   const stopped = await s.c.call('codex_chat_stop', { requestId: randomUUID(), threadId: A, turnId: T });
-  assert.equal(stopped.verifiedStopped, false);
-  assertUnknownOutcomes(s, stopped);
-  status = await s.c.call('codex_chat_status', { threadId: A });
-  assert.equal(status.admission.currentReadiness.ready, true);
-  assert.equal(s.f.calls.slice(begin).some(q => [C, D].includes(q.params?.threadId) &&
+  assert.equal(stopped.verifiedStopped, scenario.open === 0);
+  assert.equal(stopped.ownedDelegations.open, scenario.open);
+  if (scenario.open) assertUnknownOutcomes(s, stopped, scenario.open);
+  const childIds = new Set([...s.f.threads.keys()].filter(id => id !== A));
+  assert.equal(s.f.calls.slice(begin).some(q => childIds.has(q.params?.threadId) &&
     ['thread/resume', 'thread/items/list', 'thread/turns/list', 'turn/start', 'turn/interrupt', 'thread/backgroundTerminals/terminate'].includes(q.method)), false);
-  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
-  // A new send exercises the actual dispatch path and both fresh rechecks.
+  // A new send exercises dispatch and both fresh rechecks for every event shape.
   s.f.handle = (socket, q) => {
     if (q.method !== 'turn/start') return;
     const turn = { id: randomUUID(), status: 'inProgress', items: [{ type: 'userMessage', id: 'next', clientId: q.params.clientUserMessageId, content: q.params.input }] };
@@ -99,6 +91,7 @@ test('completed reviewer lifecycles admit after reconnect while five exact inter
   const sent = await s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true });
   assert.equal(sent.phase, 'accepted');
   assert.notEqual(sent.turnId, T);
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 2);
 });
 
 for (const startedLifecycle of [false, true]) for (const variant of ['missing child', 'wrong parent', 'changed cwd', 'active child', 'unknown child status',
@@ -196,7 +189,7 @@ for (const startedLifecycle of [false, true]) for (const variant of ['active', '
   assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
 });
 
-for (const startedLifecycle of [false, true]) test(`${startedLifecycle ? 'started/interacted' : 'interacted'} unloaded reviewers need no inventory RPC or reattachment; readiness is not a durable closure`, async t => {
+for (const startedLifecycle of [false, true]) test(`${startedLifecycle ? 'started/interacted' : 'interacted'} unloaded delegated agents need no inventory RPC or reattachment; readiness is not a durable closure`, async t => {
   const s = await setup(t, { startedLifecycle });
   s.f.handle = (socket, q) => {
     if ([C, D].includes(q.params?.threadId) && q.method === 'thread/backgroundTerminals/list') {

@@ -90,7 +90,7 @@ async function currentChildEvidence(c, threadId) {
       evidence.push({ threadId: node.id, reason: 'CURRENT_CHILD_STATE_UNAVAILABLE' });
     else if (goal.goal?.status === 'active' || queue.data.length)
       evidence.push({ threadId: node.id, reason: 'CURRENT_CHILD_CONTINUATION' });
-    // Unloaded historical reviewers are not resumed to reconstruct their past.
+    // Unloaded historical delegated agents are not resumed to reconstruct their past.
     if (thread.status.type === 'idle') {
       const terminals = await c.terminals(node.id);
       if (!terminals.available || !terminals.complete || terminals.data.length)
@@ -101,8 +101,8 @@ async function currentChildEvidence(c, threadId) {
   return { evidence, quiescent };
 }
 
-// Native lifecycle completion can establish readiness without establishing each
-// interaction's outcome. Keep exact closure and child-control authority separate.
+// Native delegated-agent lifecycle completion can establish readiness without
+// establishing each request outcome. Keep exact closure and control separate.
 function delegationReadiness(record, delegations, quiescent, freshFullTurns) {
   const lifecycles = new Map();
   for (const turnId of new Set(delegations.filter(item => item.state !== 'closed').map(item => item.turnId))) {
