@@ -98,6 +98,8 @@ complete empty native process inventory. A `notLoaded` receiver uses the existin
 inactive native-session rule without resume or inventory reconstruction; this is
 not a process-exit receipt or universal detached-process proof. Every send reruns
 these checks; no lifecycle readiness is retained as a durable closure.
+Unavailable or incomplete root-turn pagination cannot qualify cached lifecycle
+evidence as fresh; an existing bounded complete exact-turn item repair remains valid.
 
 Status exposes `ownedModel`, `ownedProcesses`, `ownedDelegations`,
 `ownedContinuations`, `unknownOwnedObligations` and `targetBusy`. Own-stop proof

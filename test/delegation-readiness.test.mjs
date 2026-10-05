@@ -229,3 +229,19 @@ for (const variant of ['summary', 'unavailable', 'missing turn']) test(`reconnec
   assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.ownedDelegations.open, 2);
   assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
 });
+
+for (const lateInteraction of [false, true]) test(`unavailable later history page blocks cached lifecycle readiness${lateInteraction ? ' with new interaction' : ''}`, async t => {
+  const s = await setup(t, { startedLifecycle: true });
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, true);
+  if (lateInteraction) s.turn.items.push(interaction('late', C));
+  s.f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    const response = q.params.cursor ? { error: { code: -32601, message: 'Unsupported history page' } }
+      : { result: { data: [s.turn], nextCursor: 'unavailable-page' } };
+    socket.send(JSON.stringify({ id: q.id, ...response })); return true;
+  };
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, false);
+  assert.equal((await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A })).phase, 'unverified');
+  await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
