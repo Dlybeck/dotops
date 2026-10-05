@@ -58,7 +58,8 @@ test('summary, absent, active, duplicate and unowned-origin target histories can
  }
  const x=await setup(t);x.reject();await taskSend(x.c,x.args);
  x.f.threads.get(A).turns.push(structuredClone(x.f.threads.get(A).turns[0]));
- assert.equal((await x.c.call('codex_chat_status',{threadId:A})).operations.find(o=>o.requestId===REJECTED).phase,'unknown');
+ await assert.rejects(x.c.call('codex_chat_status',{threadId:A}),{code:'INVALID_BACKEND_RESPONSE'});
+ assert.equal(x.c.store.state.operations[REJECTED].phase,'unknown');
 });
 
 test('incomplete thread history and unmanaged work keep the send lock',async t=>{
@@ -68,7 +69,7 @@ test('incomplete thread history and unmanaged work keep the send lock',async t=>
   if(mode==='goal')x.f.goal={status:'active'};
   if(mode==='queue')x.f.queue=[{id:'queued'}];
   if(mode==='active')x.f.threads.get(A).status={type:'active'};
-  if(mode==='queue')await assert.rejects(x.c.call('codex_chat_status',{threadId:A}));
+  if(mode==='queue'||mode==='incomplete')await assert.rejects(x.c.call('codex_chat_status',{threadId:A}));
   else assert.equal((await x.c.call('codex_chat_status',{threadId:A})).operations.find(o=>o.requestId===REJECTED).phase,'unknown');
   assert.equal(x.c.store.state.operations[REJECTED].phase,'unknown');
  }
@@ -104,6 +105,5 @@ test('acceptance racing negative evidence is never overwritten',async t=>{
  assert.equal(await x.c.rejectSteer(REJECTED,history,{source:'nativeNoActiveTurn'}),false);
  assert.equal(x.c.store.state.operations[REJECTED].phase,'accepted');
 });
-
 
 

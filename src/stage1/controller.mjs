@@ -497,12 +497,20 @@ export class Controller {
     if (Object.values(this.store.state.operations).some(op => op.kind === 'send' && op.threadId === threadId && op.turnId === turnId && (op.stopRequested))) fail('TURN_STOP_REQUESTED');
   }
   async turns(threadId) {
-    const result = []; let cursor;
-    for (let page = 0; page < 3; page++) {
-      const r = await this.optional('thread/turns/list', { threadId, limit: 20, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
+    const result = [], cursors = new Set(), ids = new Set(); let cursor;
+    // Native may shrink an oversized page. Preserve the existing 60-turn
+    // evidence budget rather than treating three smaller pages as all history.
+    for (let page = 0; page < 60 && result.length < 60; page++) {
+      const limit = Math.min(20, 60 - result.length);
+      const r = await this.optional('thread/turns/list', { threadId, limit, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
       if (!r) return { data: result, complete: false };
-      if (!Array.isArray(r.data) || r.data.length > 20) fail('INVALID_BACKEND_RESPONSE'); result.push(...r.data); cursor = r.nextCursor;
-      if (!cursor) { await this.recordTerminalTurns(threadId, result); return { data: result, complete: true }; }
+      if (!Array.isArray(r.data) || r.data.length > limit || r.data.some(t =>
+        !validOwnershipId(t?.id) || ids.has(t.id))) fail('INVALID_BACKEND_RESPONSE');
+      for (const turn of r.data) { if (ids.has(turn.id)) fail('INVALID_BACKEND_RESPONSE'); ids.add(turn.id); result.push(turn); }
+      cursor = r.nextCursor;
+      if (cursor === null) { await this.recordTerminalTurns(threadId, result); return { data: result, complete: true }; }
+      if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) break;
+      cursors.add(cursor);
     }
     await this.recordTerminalTurns(threadId, result);
     return { data: result, complete: false };
@@ -551,11 +559,12 @@ export class Controller {
     await this.owned(threadId);
     const items = [], itemIds = new Set(), cursors = new Set();
     let cursor, complete = false;
-    for (let page = 0; page < 20; page++) {
-      const result = await this.optional('thread/items/list', { threadId, turnId, limit: 20,
+    for (let page = 0; page < 400 && items.length < 400; page++) {
+      const limit = Math.min(20, 400 - items.length);
+      const result = await this.optional('thread/items/list', { threadId, turnId, limit,
         sortDirection: 'asc', ...(cursor ? { cursor } : {}) });
       if (!result) break;
-      if (!Array.isArray(result.data) || result.data.length > 20 || result.data.some(entry =>
+      if (!Array.isArray(result.data) || result.data.length > limit || result.data.some(entry =>
         entry?.turnId !== turnId || !validOwnershipId(entry.item?.id) || itemIds.has(entry.item.id))) fail('INVALID_BACKEND_RESPONSE');
       for (const entry of result.data) {
         if (itemIds.has(entry.item.id)) fail('INVALID_BACKEND_RESPONSE');

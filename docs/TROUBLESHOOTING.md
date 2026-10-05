@@ -10,6 +10,7 @@ Never erase a journal or clear a native goal just to make admission pass.
 | `WATCHDOG_ALREADY_RUNNING` | Another writer owns that journal. Preserve it and inspect the intended installation; do not remove the lock or start a second writer. |
 | `UNSAFE_STATE_DIRECTORY` / `UNSAFE_CONTROL_SOCKET` | Owner, mode, canonical directory or socket checks failed. Verify your intended private directory is owned by the runtime user with mode0700 and socket0600; do not broaden permissions. |
 | `DAEMON_UNAVAILABLE` | Native transport is unavailable. Check the native client and configured socket; DotOps does not start or reconfigure it. |
+| `NATIVE_RESPONSE_TOO_LARGE` | One native history record exceeds the bounded transport after paging reaches one record. History remains unavailable; no complete-history or closure proof is granted. Preserve the request and journal and report the unsupported record size. Restarting or resending cannot make that record fit. |
 | Unknown with `TURN_ORIGIN_UNVERIFIED` | Acknowledgement may precede attributable user-message history. Read status after new evidence arrives, then reuse the original request ID. Never blindly send a new ID. |
 | `CHAT_ACTIVE` / targetBusy | Current native work blocks a new start. Earlier owned-stop proof can still hold when the current work is manual and unowned. Use native controls for work DotOps does not own. |
 | `CHAT_CHANGED` | The expected last native turn is stale. Inspect the new activity and obtain a fresh status before deciding whether to send. |
@@ -24,6 +25,16 @@ A native full legacy transcript can omit command event items; retained exact
 positive exit evidence remains available. Missing live items or unavailable repair
 remain conservative. Terminal model history is not command/delegation closure,
 and a tracked command's leader exit does not cover all detached processes.
+
+History reads retain the 2 MiB native response limit. An oversized turn/item page
+is retried at the same cursor with progressively smaller limits; only those
+read-only methods are retried, never sends or ordinary disconnects. The reduced
+limit is retained for later reads on that client. Native reconnects still change
+the observation epoch and invalidate any proof bound to the previous connection.
+The existing 60-turn and 400-item evidence budgets are retained across smaller
+pages. Only an explicit end cursor establishes complete history; malformed,
+repeated or exhausted pagination remains incomplete or rejected. Those budgets
+do not guarantee that all native history or every record can be read.
 
 For a new bug, report version/commit, mode, redacted error code and a minimal
 synthetic reproduction through https://github.com/Dlybeck/dotops/issues. Omit
