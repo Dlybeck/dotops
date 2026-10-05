@@ -251,3 +251,51 @@ test('an expired in-flight history read leaves another caller and later reads av
   assert.equal(n.epoch, epoch, 'No transport loss is needed to expire a bounded read');
   assert.deepEqual(await n.request('thread/turns/list', params), { data: [], nextCursor: null });
 });
+
+test('size retries check expiration before opening another connection', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close()); let clock = Date.now(); n.now = () => clock;
+  f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    clock += 6000;
+    socket.send(JSON.stringify({ id: q.id, result: { data: [{ id: T, items: [{ text: 'x'.repeat(2100000) }] }], nextCursor: null } }));
+    return true;
+  };
+  await assert.rejects(n.request('thread/turns/list', { threadId: A, limit: 20, itemsView: 'full', sortDirection: 'desc' }, { deadlineAt: clock + 5000 }), { code: 'DEADLINE_EXPIRED' });
+  assert.equal(f.calls.filter(q => q.method === 'initialize').length, 1);
+  assert.equal(f.calls.filter(q => q.method === 'thread/turns/list').length, 1);
+});
+
+test('setup waiting is bounded per caller without canceling another caller', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close());
+  f.handle = (socket, q) => {
+    if (q.method !== 'initialize' && q.method !== 'thread/turns/list') return;
+    setTimeout(() => { if (socket.readyState === 1) socket.send(JSON.stringify({ id: q.id,
+      result: q.method === 'initialize' ? {} : { data: [], nextCursor: null } })); }, q.method === 'initialize' ? 300 : 0);
+    return true;
+  };
+  const params = { threadId: A, limit: 1, itemsView: 'full', sortDirection: 'desc' };
+  const earlier = n.request('thread/turns/list', params, { deadlineAt: Date.now() + 100 });
+  const later = n.request('thread/turns/list', { ...params, threadId: B }, { deadlineAt: Date.now() + 1500 });
+  await assert.rejects(earlier, { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  assert.deepEqual(await later, { data: [], nextCursor: null });
+  assert.deepEqual(f.calls.filter(q => q.method === 'thread/turns/list').map(q => q.params.threadId), [B]);
+  assert.equal(f.calls.filter(q => q.method === 'initialize').length, 1);
+});
+
+test('concurrent response-size failures retain uncertainty for fitting history records', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close()); await n.connect();
+  const large = Array.from({ length: 20 }, (_, i) => ({ id: `turn-${i}`, items: [{ text: 'x'.repeat(120000) }] }));
+  f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    setTimeout(() => { if (socket.readyState === 1) socket.send(JSON.stringify({ id: q.id, result: {
+      data: q.params.threadId === A ? large.slice(0, q.params.limit) : [], nextCursor: null } })); }, q.params.threadId === A ? 20 : 100);
+    return true;
+  };
+  const params = { threadId: A, limit: 20, itemsView: 'full', sortDirection: 'desc' };
+  const results = await Promise.allSettled([n.request('thread/turns/list', params), n.request('thread/turns/list', { ...params, threadId: B, limit: 1 })]);
+  assert.deepEqual(results.map(x => x.reason?.code), ['DAEMON_UNAVAILABLE', 'DAEMON_UNAVAILABLE']);
+  assert.equal((await n.request('thread/turns/list', params)).data.length, 10, 'A later isolated read can safely adapt');
+});

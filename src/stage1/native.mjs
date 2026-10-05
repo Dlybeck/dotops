@@ -53,12 +53,22 @@ export class Native extends EventEmitter {
     if (deadlineAt !== undefined && (!Number.isSafeInteger(deadlineAt) || this.now() >= deadlineAt)) fail('DEADLINE_EXPIRED');
     let limit = historyMethods.has(method) ? Math.min(params.limit, this.historyLimits.get(method) ?? 20) : null;
     for (;;) {
-      await this.connect();
+      if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
+      const connection = this.connect();
+      if (limit !== null && deadlineAt !== undefined) {
+        let timer;
+        try {
+          await Promise.race([connection, new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new SafeError('HISTORY_READ_BUDGET_EXHAUSTED')), Math.max(1, deadlineAt - this.now()));
+          })]);
+        } finally { clearTimeout(timer); }
+      } else await connection;
       // Connection setup may consume the remaining watchdog deadline. No wire
       // mutation has happened yet, so expiration here is known not-dispatched.
       if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
       try {
         const result = await this.dispatch(method, limit === null ? params : { ...params, limit }, limit === null ? undefined : deadlineAt);
+        if (limit !== null && deadlineAt !== undefined && this.now() >= deadlineAt) fail('HISTORY_READ_BUDGET_EXHAUSTED');
         if (limit !== null && Array.isArray(result.data) && result.data.length > limit) fail('INVALID_BACKEND_RESPONSE');
         return result;
       }
@@ -136,9 +146,12 @@ export class Native extends EventEmitter {
   drop(socket, code = 'DAEMON_UNAVAILABLE') {
     if (this.socket !== socket) return;
     this.socket = null; socket.terminate();
+    const attributable = this.pending.size === 1;
     for (const p of this.pending.values()) {
       clearTimeout(p.timer);
-      p.reject(new SafeError(historyMethods.has(p.method) ? code : 'DAEMON_UNAVAILABLE'));
+      // Oversized frames cannot expose their response ID. With concurrent RPCs,
+      // retain transport uncertainty instead of naming an unrelated record.
+      p.reject(new SafeError(attributable && historyMethods.has(p.method) ? code : 'DAEMON_UNAVAILABLE'));
     }
     this.pending.clear(); this.emit('disconnect', this.epoch);
   }

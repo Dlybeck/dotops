@@ -41,6 +41,11 @@ deadline, including page-size retries and reconnects. A read exceeding this time
 budget fails explicitly before the IPC reply window; partial reads cannot settle
 verification. Native events receive a fresh budget rather than a stale caller's
 deadline. Other native requests retain their existing timeout behavior.
+Each caller's wait for shared connection setup is bounded independently; expiration
+does not cancel another caller's setup or dispatch more history for the expired
+caller. A frame rejected before its response ID is available cannot identify an
+offending record when multiple RPCs are pending. Those requests retain transport
+uncertainty instead of reporting a fitting record as individually oversized.
 
 For a new bug, report version/commit, mode, redacted error code and a minimal
 synthetic reproduction through https://github.com/Dlybeck/dotops/issues. Omit
