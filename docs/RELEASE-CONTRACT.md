@@ -66,7 +66,7 @@ Terminal model status closes that model only. Known live native item/process
 pairs still block; unavailable inventory, null live handles, conflicting
 identities and incomplete exact-turn evidence retain named unknown obligations.
 Those historical results remain distinct from current readiness after an
-established local boot boundary, as described below.
+established local boot boundary or completed native reviewer lifecycle, as described below.
 Legacy Stage1 tree and attachment safeguards remain conservative.
 
 Exact legacy turn receipts and command observations migrate without deleting
@@ -79,6 +79,24 @@ completion within its owned turn; overlapping inputs remain unknown. No such
 activity grants child-stop authority. Last-known agent status, ancestry, cwd and
 latest child turn never grant ownership. There is currently no native exact
 receiver-turn dispatch receipt, so unresolved child work stays conservative.
+
+An unknown `interacted` outcome can coexist with current readiness when complete,
+conflict-free terminal owned-turn history contains a matching receiver lifecycle
+completion after that interaction, and the exact receiver passes fresh current
+descendant activity checks. `currentReadiness.delegationReadiness` reports this
+snapshot separately. Several interactions can precede one lifecycle completion;
+this does not claim that each interaction succeeded or create an operation closure.
+The delegation remains unknown, own-stop remains unverified, and child-control
+authority is unchanged. A later interaction requires a later completion.
+Unresolved started/typed waking operations, missing receivers, incomplete history,
+active work and unavailable required current-state evidence still block.
+
+Current receiver checks require complete descendant pagination, matching native
+metadata, known non-active goal and empty queue. An idle receiver also requires
+complete empty native process inventory. A `notLoaded` receiver uses the existing
+inactive native-session rule without resume or inventory reconstruction; this is
+not a process-exit receipt or universal detached-process proof. Every send reruns
+these checks; no lifecycle readiness is retained as a durable closure.
 
 Status exposes `ownedModel`, `ownedProcesses`, `ownedDelegations`,
 `ownedContinuations`, `unknownOwnedObligations` and `targetBusy`. Own-stop proof
