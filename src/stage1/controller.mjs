@@ -497,12 +497,15 @@ export class Controller {
     if (Object.values(this.store.state.operations).some(op => op.kind === 'send' && op.threadId === threadId && op.turnId === turnId && (op.stopRequested))) fail('TURN_STOP_REQUESTED');
   }
   async turns(threadId) {
-    const result = []; let cursor;
+    const result = [], cursors = new Set(); let cursor;
     for (let page = 0; page < 3; page++) {
       const r = await this.optional('thread/turns/list', { threadId, limit: 20, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
       if (!r) return { data: result, complete: false };
       if (!Array.isArray(r.data) || r.data.length > 20) fail('INVALID_BACKEND_RESPONSE'); result.push(...r.data); cursor = r.nextCursor;
-      if (!cursor) { await this.recordTerminalTurns(threadId, result); return { data: result, complete: true }; }
+      if (cursor === null) { await this.recordTerminalTurns(threadId, result); return { data: result, complete: true }; }
+      if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor))
+        return { data: result, complete: false };
+      cursors.add(cursor);
     }
     await this.recordTerminalTurns(threadId, result);
     return { data: result, complete: false };
