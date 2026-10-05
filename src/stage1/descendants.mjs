@@ -21,7 +21,7 @@ export async function readDescendants(c, rootId) {
           sessionId: thread.sessionId ?? null, cwd: thread.cwd, status: thread.status?.type ?? 'unknown', archived });
       }
       cursor = result.nextCursor;
-      if (!cursor) { complete = true; break; }
+      if (cursor === null) { complete = true; break; }
       if (typeof cursor !== 'string' || cursor.length > 2048 || cursors.has(cursor)) return null;
       cursors.add(cursor);
     }

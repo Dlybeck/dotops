@@ -37,7 +37,7 @@ test('closed owned operation admits after reconnect without reopening unloaded h
   await s.c.call('codex_chat_status', { threadId: A }); await s.restart();
   const begin = s.f.calls.length;
   assert.equal((await s.send()).phase, 'accepted');
-  assert.equal(s.f.calls.slice(begin).some(q => q.params?.threadId === CHILD || q.method === 'thread/list'), false);
+  assert.equal(s.f.calls.slice(begin).some(q => q.params?.threadId === CHILD && ['thread/resume', 'thread/turns/list', 'thread/items/list', 'turn/start', 'turn/interrupt'].includes(q.method)), false);
 });
 test('manual current work blocks target admission while earlier own-stop remains proved', async t => {
   const s = await setup(t);
@@ -82,7 +82,7 @@ test('ambiguous native interacted operation stays named and grants no child inte
   assert.equal(result.verifiedStopped, false);
   assert.equal(result.ownedDelegations.items[0].reason, 'AMBIGUOUS_INTERACTED_DELEGATION');
   assert.equal(result.ownedDelegations.items[0].childStopAuthorized, false);
-  assert.equal(s.f.calls.some(q => q.params?.threadId === CHILD), false);
+  assert.equal(s.f.calls.some(q => q.params?.threadId === CHILD && ['thread/resume', 'thread/turns/list', 'thread/items/list', 'turn/start', 'turn/interrupt'].includes(q.method)), false);
   assert.deepEqual(Object.keys(s.c.store.state.threads), [A]);
 });
 
@@ -383,4 +383,169 @@ test('native event exit omitted by legacy full transcript survives reconnect and
   assert.equal(status.admission.newStart, 'preflightRequired');
   assert.equal((await s.send()).phase, 'accepted');
   assert.equal(s.f.calls.some(q => q.method === 'thread/backgroundTerminals/terminate'), false);
+});
+
+const OLD_BOOT = '99999999-9999-4999-8999-999999999999';
+test('full local reboot admits fresh work while historical command and delegation results remain unknown', async t => {
+  const s = await setup(t);
+  s.turn.items.push({ type: 'commandExecution', id: 'old-command', processId: null, status: 'completed', exitCode: null },
+    { type: 'subAgentActivity', id: 'old-launch', kind: 'started', agentThreadId: CHILD });
+  await s.c.call('codex_chat_status', { threadId: A });
+  await s.restart(state => {
+    for (const op of Object.values(state.operations)) if (op.kind === 'send') op.dispatchBinding.bootId = OLD_BOOT;
+  });
+  const status = await s.c.call('codex_chat_status', { threadId: A });
+  assert.equal(status.admission.unknownOwnedObligations.open, 2);
+  assert.equal(status.admission.currentReadiness.ready, true);
+  assert.equal(status.admission.newStart, 'preflightRequired');
+  const reconciled = await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A });
+  assert.equal(reconciled.phase, 'verified');
+  assert.equal(reconciled.verificationScope, 'currentLocalReadiness');
+  assert.equal(reconciled.historicalUnknowns.open, 2);
+  assert.equal((await s.send()).phase, 'accepted');
+});
+
+for (const variant of ['same boot', 'same boot uppercase', 'missing boot', 'invalid boot', 'different host']) test(`old result gap still blocks when local reboot is unestablished: ${variant}`, async t => {
+  const s = await setup(t);
+  s.turn.items.push({ type: 'commandExecution', id: 'unknown-result', processId: null, status: 'completed', exitCode: null });
+  await s.c.call('codex_chat_status', { threadId: A });
+  await s.restart(state => {
+    for (const op of Object.values(state.operations)) if (op.kind === 'send') {
+      if (variant === 'same boot uppercase') op.dispatchBinding.bootId = op.dispatchBinding.bootId.toUpperCase();
+      if (variant === 'missing boot') delete op.dispatchBinding.bootId;
+      if (variant === 'invalid boot') op.dispatchBinding.bootId = 'invalid';
+      if (variant === 'different host') { op.dispatchBinding.bootId = OLD_BOOT; op.dispatchBinding.host = 'another-host'; }
+    }
+  });
+  s.f.disconnect();
+  await assert.rejects(s.send(), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
+
+for (const variant of ['root active', 'root process', 'root goal', 'root queue', 'child active', 'child process', 'child goal', 'child queue', 'inventory unavailable'])
+  test(`established reboot cannot bypass current ${variant}`, async t => {
+    const s = await setup(t);
+    s.turn.items.push({ type: 'commandExecution', id: 'unknown-result', processId: null, status: 'completed', exitCode: null });
+    await s.c.call('codex_chat_status', { threadId: A });
+    await s.restart(state => { for (const op of Object.values(state.operations)) if (op.kind === 'send') op.dispatchBinding.bootId = OLD_BOOT; });
+    const child = s.f.thread(CHILD); Object.assign(child, { parentThreadId: A, status: { type: 'notLoaded' }, turns: [] }); s.f.threads.set(CHILD, child);
+    if (variant === 'root active') s.root.status = { type: 'active' };
+    if (variant === 'root process') s.f.terminals = [{ itemId: 'new-process', processId: '42', cwd: s.f.cwd }];
+    if (variant === 'root goal') s.f.goal = { objective: 'Auto continuation', status: 'active' };
+    if (variant === 'root queue') s.f.queue = [{ id: 'queued', clientUserMessageId: randomUUID() }];
+    const handle = s.f.handle;
+    s.f.handle = (socket, q) => {
+      if (q.params?.threadId === CHILD) {
+        if (variant === 'child active' && q.method === 'thread/read') child.status = { type: 'active' };
+        if (variant === 'child process') child.status = { type: 'idle' };
+        if (variant === 'child process' && q.method === 'thread/backgroundTerminals/list') {
+          socket.send(JSON.stringify({ id: q.id, result: { data: [{ itemId: 'child-job', processId: '99', cwd: s.f.cwd }], nextCursor: null } })); return true;
+        }
+        if (variant === 'child goal' && q.method === 'thread/goal/get') {
+          socket.send(JSON.stringify({ id: q.id, result: { goal: { status: 'active', objective: 'Child auto continuation' } } })); return true;
+        }
+        if (variant === 'child queue' && q.method === 'thread/queue/list') {
+          socket.send(JSON.stringify({ id: q.id, result: { data: [{ id: 'child-queued' }], nextCursor: null } })); return true;
+        }
+      }
+      if (variant === 'inventory unavailable' && q.method === 'thread/backgroundTerminals/list') {
+        socket.send(JSON.stringify({ id: q.id, error: { code: -32600, message: 'Unavailable' } })); return true;
+      }
+      return handle(socket, q);
+    };
+    const status = await s.c.call('codex_chat_status', { threadId: A });
+    assert.equal(status.admission.newStart, 'blocked');
+    await assert.rejects(s.send());
+    assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+    assert.equal(s.f.calls.some(q => q.params?.threadId === CHILD && ['thread/resume', 'turn/interrupt', 'thread/backgroundTerminals/terminate'].includes(q.method)), false);
+  });
+
+for (const variant of ['active goal', 'queued input', 'active model', 'missing environment']) test(`post-resume ${variant} is checked before dispatch after reboot`, async t => {
+  const s = await setup(t);
+  s.turn.items.push({ type: 'commandExecution', id: 'unknown-result', processId: null, status: 'completed', exitCode: null });
+  await s.c.call('codex_chat_status', { threadId: A });
+  await s.restart(state => { for (const op of Object.values(state.operations)) if (op.kind === 'send') op.dispatchBinding.bootId = OLD_BOOT; });
+  s.root.status = { type: 'notLoaded' };
+  const handle = s.f.handle;
+  s.f.handle = (socket, q) => {
+    if (q.method === 'thread/resume') {
+      s.root.status = { type: variant === 'active model' ? 'active' : 'idle' };
+      if (variant === 'active goal') s.f.goal = { status: 'active', objective: 'Restored goal' };
+      if (variant === 'queued input') s.f.queue = [{ id: 'restored' }];
+      if (variant === 'missing environment') s.root.environments = null;
+    }
+    return handle(socket, q);
+  };
+  await assert.rejects(s.send());
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
+
+test('future dispatches carry the current host boot identity and remain blocking in that boot', async t => {
+  const s = await setup(t);
+  const op = Object.values(s.c.store.state.operations).find(op => op.kind === 'send');
+  assert.match(op.dispatchBinding.bootId, /^[0-9a-f-]{36}$/);
+  assert.equal(op.dispatchBinding.bootId, s.c.execution.bootId);
+  s.turn.items.push({ type: 'commandExecution', id: 'current-unknown', processId: null, status: 'completed', exitCode: null });
+  await s.restart(); await assert.rejects(s.send(), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+});
+
+for (const previousBoot of [false, true]) test(`uncertain dispatch is never replayed; ${previousBoot ? 'ended local lifetime permits a new request' : 'current lifetime blocks a new request'}`, async t => {
+  const s = await setup(t);
+  const requestId = s.f.calls.find(q => q.method === 'turn/start').params.clientUserMessageId;
+  await s.restart(state => {
+    const op = state.operations[requestId]; op.phase = 'unknown'; op.result = { requestId, threadId: A, phase: 'unknown' };
+    if (previousBoot) op.dispatchBinding.bootId = OLD_BOOT;
+  });
+  const replay = await s.c.call('codex_chat_send', { requestId, threadId: A, text: 'Owned', expectedLastTurnId: null, acknowledgeConcurrentStartRisk: true });
+  assert.equal(replay.phase, 'unknown');
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+  if (previousBoot) assert.equal((await s.send()).phase, 'accepted');
+  else await assert.rejects(s.send(), { code: 'SEND_UNRESOLVED' });
+});
+
+for (const method of ['thread/goal/get', 'thread/queue/list']) test(`malformed current ${method} response cannot grant reboot admission`, async t => {
+  const s = await setup(t);
+  await s.restart(state => { for (const op of Object.values(state.operations)) if (op.kind === 'send') op.dispatchBinding.bootId = OLD_BOOT; });
+  const handle = s.f.handle;
+  s.f.handle = (socket, q) => {
+    if (q.method !== method) return handle(socket, q);
+    socket.send(JSON.stringify({ id: q.id, result: method === 'thread/goal/get' ? {} : { data: [] } })); return true;
+  };
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, false);
+  await assert.rejects(s.send());
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
+
+test('ended uncertain dispatch cannot bypass a fresh live root process', async t => {
+  const s = await setup(t);
+  await s.restart(state => {
+    for (const op of Object.values(state.operations)) if (op.kind === 'send') {
+      op.phase = 'unknown'; op.dispatchBinding.bootId = OLD_BOOT;
+      op.result = { phase: 'unknown', threadId: A };
+    }
+  });
+  s.f.terminals = [{ itemId: 'new-live', processId: '42', cwd: s.f.cwd }];
+  await assert.rejects(s.send(), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
+
+for (const nextCursor of [undefined, '', false]) test(`incomplete current child listing cannot authorize reboot admission: ${String(nextCursor)}`, async t => {
+  const s = await setup(t);
+  await s.restart(state => { for (const op of Object.values(state.operations)) if (op.kind === 'send') op.dispatchBinding.bootId = OLD_BOOT; });
+  const handle = s.f.handle;
+  s.f.handle = (socket, q) => {
+    if (q.method !== 'thread/list') return handle(socket, q);
+    socket.send(JSON.stringify({ id: q.id, result: { data: [], ...(nextCursor === undefined ? {} : { nextCursor }) } })); return true;
+  };
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, false);
+  await assert.rejects(s.send(), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+});
+
+for (const priorBoot of [false, true]) test(`stale owned model history ${priorBoot ? 'does not override ended local lifetime' : 'remains blocking without a reboot'}`, async t => {
+  const s = await setup(t); s.turn.status = 'inProgress';
+  await s.restart(state => { if (priorBoot) for (const op of Object.values(state.operations)) if (op.kind === 'send') op.dispatchBinding.bootId = OLD_BOOT; });
+  if (priorBoot) {
+    assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, true);
+    assert.equal((await s.send()).phase, 'accepted');
+  } else await assert.rejects(s.send(), { code: 'PREVIOUS_WORK_UNVERIFIED' });
 });
