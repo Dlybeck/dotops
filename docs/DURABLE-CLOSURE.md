@@ -23,6 +23,13 @@ explicitly accepted root turns, rather than treating ancestry as ownership.
 Supported bounded `thread/items/list` repair can establish new closure if it
 returns exact receipts. Unsupported APIs or empty history cannot supply proof.
 
+Expanded current-state admission paginates both descendant archive partitions to
+completion independently of legacy attachment's bounded verification tree.
+Incomplete inventories, current activity and continuations still block. Retained
+delegation receipts are indexed once per capture/evaluation; duplicate completion
+claims, including malformed claimants, cannot become valid unique closure. This
+index is transient and does not change the journal format or child-stop authority.
+
 ## Recovery limits
 
 This prevents loss of previously proved closure; it does not reconstruct closure

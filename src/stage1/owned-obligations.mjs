@@ -61,24 +61,29 @@ function delegationIdentity(item) {
   return null;
 }
 
-function retainedDelegationClosure(owned, launchId) {
-  const receipt = owned.delegationClosures?.[launchId];
-  if (!receipt || receipt.source !== 'orderedNativeCompletion' || receipt.launchId !== launchId ||
-      !validOwnershipId(receipt.completionId) || receipt.completionId === launchId ||
-      Object.entries(owned.delegationClosures).some(([id, other]) => id !== launchId && other?.completionId === receipt.completionId)) return null;
-  const launch = owned.items[launchId], completion = owned.items[receipt.completionId], identity = delegationIdentity(launch);
-  return identity && JSON.stringify(identity) === JSON.stringify(receipt.identity) &&
-    completion?.type === 'subAgentActivity' && completion.kind === 'completed' &&
-    validOwnershipId(identity.agentThreadId) && completion.agentThreadId === identity.agentThreadId &&
-    !launch.identityConflict && !completion.identityConflict
-    ? receipt : null;
-}
-
-function retainedDelegationItem(owned, id) {
-  return Object.keys(owned.delegationClosures ?? {}).some(launchId => {
-    const receipt = retainedDelegationClosure(owned, launchId);
-    return receipt && (id === receipt.launchId || id === receipt.completionId);
-  });
+function retainedDelegationIndex(owned) {
+  const receipts = Object.entries(owned.delegationClosures ?? {}), completionClaims = new Map();
+  const byLaunch = new Map(), items = new Set();
+  // Count every claim, even malformed receipts: a duplicate cannot be laundered
+  // into a unique valid completion by discarding its conflicting claimant.
+  for (const [, receipt] of receipts) {
+    const id = receipt?.completionId;
+    completionClaims.set(id, (completionClaims.get(id) ?? 0) + 1);
+  }
+  for (const [launchId, receipt] of receipts) {
+    if (!receipt || receipt.source !== 'orderedNativeCompletion' || receipt.launchId !== launchId ||
+        !validOwnershipId(receipt.completionId) || receipt.completionId === launchId ||
+        completionClaims.get(receipt.completionId) !== 1) continue;
+    const launch = owned.items[launchId], completion = owned.items[receipt.completionId], identity = delegationIdentity(launch);
+    if (identity && JSON.stringify(identity) === JSON.stringify(receipt.identity) &&
+        completion?.type === 'subAgentActivity' && completion.kind === 'completed' &&
+        validOwnershipId(identity.agentThreadId) && completion.agentThreadId === identity.agentThreadId &&
+        !launch.identityConflict && !completion.identityConflict) {
+      byLaunch.set(launchId, receipt);
+      items.add(launchId); items.add(receipt.completionId);
+    }
+  }
+  return { byLaunch, items };
 }
 
 export function captureOwnedTurn(record, turn, { eventItem = false } = {}) {
@@ -93,26 +98,27 @@ export function captureOwnedTurn(record, turn, { eventItem = false } = {}) {
     else owned.modelStatus = turn.status;
   }
   if (!Array.isArray(turn.items)) return;
-  const order = [];
+  const order = [], currentIds = new Set(), observedIds = new Set(owned.observedOrder);
   for (const item of turn.items) {
     const evidence = itemEvidence(item);
     if (!evidence) {
       if (['commandExecution', 'subAgentActivity', 'collabAgentToolCall'].includes(item?.type)) owned.malformedEvidence = true;
       continue;
     }
-    if (order.includes(item.id)) owned.malformedEvidence = true;
-    order.push(item.id);
+    if (currentIds.has(item.id)) owned.malformedEvidence = true;
+    order.push(item.id); currentIds.add(item.id);
     const previous = owned.items[item.id], merged = mergeItem(previous, evidence);
     if ((eventItem || turn.itemsView !== 'full') && JSON.stringify(previous) !== JSON.stringify(merged)) owned.fullItemsObserved = false;
     owned.items[item.id] = merged;
-    if (!owned.observedOrder.includes(item.id)) owned.observedOrder.push(item.id);
+    if (!observedIds.has(item.id)) { owned.observedOrder.push(item.id); observedIds.add(item.id); }
   }
   if (!eventItem && turn.itemsView === 'full') {
+    const retained = retainedDelegationIndex(owned);
     // Legacy native full history may omit command items delivered on the event
     // stream. Preserve positive leader-exit evidence; an omitted unresolved or
     // conflicting item still makes the history incomplete for owned proof.
     owned.historyConflict = Object.entries(owned.items).some(([id, item]) =>
-      !order.includes(id) && !retainedDelegationItem(owned, id) &&
+      !currentIds.has(id) && !retained.items.has(id) &&
       !(item.type === 'commandExecution' && !item.identityConflict &&
         ['completed', 'failed'].includes(item.status) && Number.isSafeInteger(item.exitCode)));
     owned.fullItemsObserved = !owned.historyConflict;
@@ -121,7 +127,7 @@ export function captureOwnedTurn(record, turn, { eventItem = false } = {}) {
     // Retain only closure already proved by a complete ordered native snapshot.
     // This is operation closure, never a receiver-turn or child-control grant.
     if (terminalModels.has(owned.modelStatus) && !owned.modelConflict && owned.fullItemsObserved && !owned.malformedEvidence) {
-      for (const closure of delegationObligations(owned)) if (closure.state === 'closed' && closure.completionItemId) {
+      for (const closure of delegationObligations(owned, undefined, retained)) if (closure.state === 'closed' && closure.completionItemId) {
         const launch = owned.items[closure.itemId];
         owned.delegationClosures ??= {};
         owned.delegationClosures[closure.itemId] = { source: 'orderedNativeCompletion', launchId: closure.itemId,
@@ -191,7 +197,7 @@ export function commandObligations(owned, inventory) {
   });
 }
 
-function delegationObligations(owned, threadId) {
+function delegationObligations(owned, threadId, retained = retainedDelegationIndex(owned)) {
   const result = [], pending = new Map(), pairable = new WeakSet();
   const ordered = [...new Set([...(owned.historyOrder ?? owned.observedOrder), ...owned.observedOrder])].map(id => owned.items[id]);
   const complete = owned.fullItemsObserved && !owned.historyConflict && !owned.malformedEvidence;
@@ -199,7 +205,7 @@ function delegationObligations(owned, threadId) {
     if (item.type === 'subAgentActivity' && item.kind === 'completed') {
       // A retained completion belongs to its original exact operation. It must
       // not be reused to close a newly observed launch to the same receiver.
-      if (retainedDelegationItem(owned, item.id)) continue;
+      if (retained.items.has(item.id)) continue;
       const open = pending.get(item.agentThreadId) ?? [];
       if (complete && item.agentThreadId && !item.identityConflict && open.length === 1 && !open[0].identityConflict && pairable.has(open[0])) {
         open[0].state = 'closed'; open[0].reason = 'ORDERED_NATIVE_COMPLETION'; open[0].completionItemId = item.id;
@@ -221,10 +227,10 @@ function delegationObligations(owned, threadId) {
         : item.kind === 'interacted' ? 'AMBIGUOUS_INTERACTED_DELEGATION' : 'DELEGATION_CAUSALITY_UNVERIFIED',
       childStopAuthorized: false, ...(item.identityConflict ? { identityConflict: true } : {}) };
     result.push(obligation);
-    const retained = retainedDelegationClosure(owned, item.id);
-    if (retained && senderVerified) {
+    const receipt = retained.byLaunch.get(item.id);
+    if (receipt && senderVerified) {
       obligation.state = 'closed'; obligation.reason = 'DURABLE_NATIVE_COMPLETION';
-      obligation.completionItemId = retained.completionId;
+      obligation.completionItemId = receipt.completionId;
       continue;
     }
     if (informational) continue;

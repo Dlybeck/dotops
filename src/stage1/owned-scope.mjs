@@ -1,5 +1,5 @@
 import { localLifetimeEnded } from './execution.mjs';
-import { readDescendants } from './descendants.mjs';
+import { readCurrentDescendants } from './descendants.mjs';
 import { fail } from '../safety.mjs';
 import { evaluateOwnedObligations, migrateOwnedObligations, validOwnershipId } from './owned-obligations.mjs';
 import { goalOperationClosed, retainGoalClosure, validGoalFingerprint } from './goal-records.mjs';
@@ -73,7 +73,7 @@ function goalStateKnown(response) {
 }
 
 async function currentChildEvidence(c, threadId) {
-  const inventory = await readDescendants(c, threadId), evidence = [];
+  const inventory = await readCurrentDescendants(c, threadId), evidence = [];
   if (!inventory) return [{ reason: 'CURRENT_CHILD_STATE_UNAVAILABLE' }];
   for (const node of inventory.threads.values()) {
     const thread = (await c.optional('thread/read', { threadId: node.id, includeTurns: false }))?.thread;
