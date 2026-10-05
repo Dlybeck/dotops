@@ -18,6 +18,7 @@ import { captureOwnedTurn, validOwnershipId } from './owned-obligations.mjs';
 import { ownedScopeProof, recheckOwnedScope, requireScopeCurrent, scopeSummary, localTurnLifetimeEnded } from './owned-scope.mjs';
 import { goalMetadata, goalRequestFingerprint, migrateGoalRecords } from './goal-records.mjs';
 export const CONTROL_ROOT = path.join(homedir(), 'Projects/codex-dot-connector');
+const HISTORY_READ_BUDGET_MS = 5000;
 
 function acceptedSendResult(requestId, op, turnId) {
   return { requestId, threadId: op.threadId, turnId, phase: 'accepted', developerContext: !!op.developerContext,
@@ -85,7 +86,7 @@ export class Controller {
     // All history traversal/repair in one control request shares a time budget
     // below the IPC reply timeout. Concurrent requests and later native events
     // must not inherit one another's deadlines.
-    return this.historyReads.run(this.now() + 5000, () => this.callWithHistoryBudget(name, raw));
+    return this.historyReads.run(this.now() + HISTORY_READ_BUDGET_MS, () => this.callWithHistoryBudget(name, raw));
   }
   async callWithHistoryBudget(name, raw) {
     if (this.failed) fail('STATE_LOCK_LOST');
@@ -511,7 +512,7 @@ export class Controller {
   }
   async turns(threadId) {
     const result = [], cursors = new Set(), ids = new Set(); let cursor;
-    const deadlineAt = this.historyReads?.getStore() ?? this.now() + 5000;
+    const deadlineAt = this.historyReads?.getStore() ?? this.now() + HISTORY_READ_BUDGET_MS;
     // Native may shrink an oversized page. Preserve the existing 60-turn
     // evidence budget rather than treating three smaller pages as all history.
     for (let page = 0; page < 60 && result.length < 60; page++) {
@@ -572,7 +573,7 @@ export class Controller {
     this.ownTurn(threadId, turnId);
     await this.owned(threadId);
     const items = [], itemIds = new Set(), cursors = new Set();
-    const deadlineAt = this.historyReads?.getStore() ?? this.now() + 5000;
+    const deadlineAt = this.historyReads?.getStore() ?? this.now() + HISTORY_READ_BUDGET_MS;
     let cursor, complete = false;
     for (let page = 0; page < 400 && items.length < 400; page++) {
       const limit = Math.min(20, 400 - items.length);

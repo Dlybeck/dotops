@@ -118,7 +118,13 @@ export class Native extends EventEmitter {
     return new Promise((resolve, reject) => {
       const remaining = historyDeadlineAt === undefined ? this.timeoutMs : historyDeadlineAt - this.now();
       const budgetLimited = historyDeadlineAt !== undefined && remaining <= this.timeoutMs;
-      const timer = setTimeout(() => this.drop(socket, budgetLimited ? 'HISTORY_READ_BUDGET_EXHAUSTED' : 'DAEMON_UNAVAILABLE'), Math.max(1, Math.min(this.timeoutMs, remaining)));
+      const timer = setTimeout(() => {
+        if (!budgetLimited) { this.drop(socket); return; }
+        // Expiring one read must not expire concurrent callers. Remove its
+        // correlation; a late response is ignored without closing their socket.
+        this.pending.delete(id);
+        reject(new SafeError('HISTORY_READ_BUDGET_EXHAUSTED'));
+      }, Math.max(1, Math.min(this.timeoutMs, remaining)));
       this.pending.set(id, { resolve, reject, timer, method });
       socket.send(JSON.stringify({ id, method, params }), error => { if (error) this.drop(socket); });
     });

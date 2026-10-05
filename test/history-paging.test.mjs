@@ -232,3 +232,22 @@ test('overlapping status calls retain independent history budgets', async t => {
   assert.equal((await later).threadId, B, 'The later request remains inside its own budget');
   release(); await earlierFailure;
 });
+
+test('an expired in-flight history read leaves another caller and later reads available', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close()); await n.connect();
+  f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    setTimeout(() => {
+      if (socket.readyState === 1) socket.send(JSON.stringify({ id: q.id, result: { data: [], nextCursor: null } }));
+    }, 200);
+    return true;
+  };
+  const params = { threadId: A, limit: 1, itemsView: 'full', sortDirection: 'desc' }, epoch = n.epoch;
+  const earlier = n.request('thread/turns/list', params, { deadlineAt: Date.now() + 100 });
+  const later = n.request('thread/turns/list', { ...params, threadId: B }, { deadlineAt: Date.now() + 1500 });
+  await assert.rejects(earlier, { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  assert.deepEqual(await later, { data: [], nextCursor: null });
+  assert.equal(n.epoch, epoch, 'No transport loss is needed to expire a bounded read');
+  assert.deepEqual(await n.request('thread/turns/list', params), { data: [], nextCursor: null });
+});
