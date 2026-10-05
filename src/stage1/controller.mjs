@@ -157,7 +157,9 @@ export class Controller {
   }
   async owned(threadId) {
     const record = this.store.state.threads[threadId]; if (!record) fail('CHAT_NOT_OWNED');
+    this.requireHistoryBudget();
     const { thread } = await this.native.request('thread/read', { threadId, includeTurns: false });
+    this.requireHistoryBudget();
     if (!thread || thread.id !== threadId || thread.parentThreadId) fail('OUT_OF_SCOPE');
     const observedCwd = await this.scope.cwd(thread.cwd).catch(() => null);
     if (observedCwd !== record.cwd) throw new SafeError('OUT_OF_SCOPE', { threadId, expectedCwd: record.cwd,
@@ -480,11 +482,19 @@ export class Controller {
     }
     return result;
   }
-  async optional(method, params, options) {
+  requireHistoryBudget() {
     const deadlineAt = this.historyReads?.getStore();
     if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('HISTORY_READ_BUDGET_EXHAUSTED');
-    try { return await this.native.request(method, params, options); }
+  }
+  async optional(method, params, options) {
+    this.requireHistoryBudget();
+    try {
+      const result = await this.native.request(method, params, options);
+      this.requireHistoryBudget();
+      return result;
+    }
     catch (e) {
+      this.requireHistoryBudget();
       if (options?.deadlineAt !== undefined && e.code === 'DEADLINE_EXPIRED') fail('HISTORY_READ_BUDGET_EXHAUSTED');
       if (['UNSUPPORTED_RPC', 'BACKEND_REJECTED'].includes(e.code)) return null; throw e;
     }

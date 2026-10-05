@@ -299,3 +299,54 @@ test('concurrent response-size failures retain uncertainty for fitting history r
   assert.deepEqual(results.map(x => x.reason?.code), ['DAEMON_UNAVAILABLE', 'DAEMON_UNAVAILABLE']);
   assert.equal((await n.request('thread/turns/list', params)).data.length, 10, 'A later isolated read can safely adapt');
 });
+
+test('late oversized expired responses retain uncertainty for another caller', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close()); await n.connect();
+  f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    setTimeout(() => { if (socket.readyState === 1) socket.send(JSON.stringify({ id: q.id, result: {
+      data: q.params.threadId === A ? [{ id: T, items: [{ text: 'x'.repeat(2100000) }] }] : [], nextCursor: null
+    } })); }, q.params.threadId === A ? 200 : 400);
+    return true;
+  };
+  const params = { threadId: A, limit: 1, itemsView: 'full', sortDirection: 'desc' };
+  const earlier = n.request('thread/turns/list', params, { deadlineAt: Date.now() + 100 });
+  const later = n.request('thread/turns/list', { ...params, threadId: B }, { deadlineAt: Date.now() + 1500 });
+  await assert.rejects(earlier, { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  await assert.rejects(later, { code: 'DAEMON_UNAVAILABLE' });
+});
+
+test('unanswered expired reads retain bounded capacity until their replies arrive', async t => {
+  const f = await fixture(t), n = new Native({ socketPath: f.socket });
+  t.after(() => n.close()); await n.connect();
+  const delayed = [];
+  f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    delayed.push({ socket, q }); return true;
+  };
+  const params = { threadId: A, limit: 1, itemsView: 'full', sortDirection: 'desc' };
+  const results = await Promise.allSettled(Array.from({ length: 16 }, () => n.request('thread/turns/list', params, { deadlineAt: Date.now() + 100 })));
+  assert.ok(results.every(r => r.reason?.code === 'HISTORY_READ_BUDGET_EXHAUSTED'));
+  await assert.rejects(n.request('thread/turns/list', params), { code: 'BUSY' });
+  for (const {socket, q} of delayed) socket.send(JSON.stringify({ id: q.id, result: { data: [], nextCursor: null } }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  f.handle = null;
+  assert.ok(Array.isArray((await n.request('thread/turns/list', params)).data));
+});
+
+test('final descendant inventory exhaustion stops the root ownership reread', async t => {
+  const f = await fixture(t); let clock = Date.now(), expired = false;
+  const c = await Controller.open({ accessMode: 'user-directories', socketPath: f.socket, stateDir: f.dir + '/state', now: () => clock });
+  t.after(() => c.close());
+  await c.call('codex_chat_create', { requestId: R, repository: f.cwd, title: 'Final inventory budget fixture' });
+  const afterExpiry = [];
+  f.handle = (socket, q) => {
+    if (expired) afterExpiry.push(q.method);
+    if (q.method === 'thread/turns/list') clock += 2000;
+    if (q.method === 'thread/list' && q.params.archived) { clock += 3600; expired = true; }
+  };
+  await assert.rejects(c.call('codex_chat_status', { threadId: A }), { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  assert.deepEqual(afterExpiry, []);
+  assert.equal(f.calls.some(q => q.method === 'turn/start'), false);
+});

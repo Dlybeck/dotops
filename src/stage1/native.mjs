@@ -45,7 +45,7 @@ const methods = {
 export class Native extends EventEmitter {
   constructor({ socketPath = APP_SERVER_SOCKET, timeoutMs = 4000 } = {}) {
     super(); this.now = () => Date.now(); this.socketPath = socketPath; this.timeoutMs = timeoutMs;
-    this.pending = new Map(); this.counter = 0; this.epoch = 0; this.closed = false;
+    this.pending = new Map(); this.outstanding = new Set(); this.counter = 0; this.epoch = 0; this.closed = false;
     this.historyLimits = new Map();
   }
   async request(method, params, { deadlineAt } = {}) {
@@ -99,6 +99,7 @@ export class Native extends EventEmitter {
       let m; try { if (binary) throw new Error(); m = JSON.parse(bytes.toString()); if (!m || typeof m !== 'object' || Array.isArray(m)) throw new Error(); }
       catch { this.drop(socket); return; }
       if (m.method) { this.emit('event', { ...m, epoch }); return; }
+      this.outstanding.delete(m.id);
       const p = this.pending.get(m.id); if (!p) return;
       clearTimeout(p.timer); this.pending.delete(m.id);
       if (m.error) {
@@ -123,19 +124,21 @@ export class Native extends EventEmitter {
   }
   dispatch(method, params, historyDeadlineAt) {
     if (this.closed || this.socket?.readyState !== WebSocket.OPEN) return Promise.reject(new SafeError('DAEMON_UNAVAILABLE'));
-    if (this.pending.size >= 16) return Promise.reject(new SafeError('BUSY'));
+    if (this.outstanding.size >= 16) return Promise.reject(new SafeError('BUSY'));
     const socket = this.socket; const id = ++this.counter;
     return new Promise((resolve, reject) => {
       const remaining = historyDeadlineAt === undefined ? this.timeoutMs : historyDeadlineAt - this.now();
       const budgetLimited = historyDeadlineAt !== undefined && remaining <= this.timeoutMs;
       const timer = setTimeout(() => {
         if (!budgetLimited) { this.drop(socket); return; }
-        // Expiring one read must not expire concurrent callers. Remove its
-        // correlation; a late response is ignored without closing their socket.
+        // Expiring one read must not expire concurrent callers. Its wire request
+        // remains outstanding until a late response or disconnect, preserving
+        // size-error attribution and the sixteen-request capacity bound.
         this.pending.delete(id);
         reject(new SafeError('HISTORY_READ_BUDGET_EXHAUSTED'));
       }, Math.max(1, Math.min(this.timeoutMs, remaining)));
       this.pending.set(id, { resolve, reject, timer, method });
+      this.outstanding.add(id);
       socket.send(JSON.stringify({ id, method, params }), error => { if (error) this.drop(socket); });
     });
   }
@@ -146,14 +149,14 @@ export class Native extends EventEmitter {
   drop(socket, code = 'DAEMON_UNAVAILABLE') {
     if (this.socket !== socket) return;
     this.socket = null; socket.terminate();
-    const attributable = this.pending.size === 1;
+    const attributable = this.outstanding.size === 1 && this.pending.size === 1;
     for (const p of this.pending.values()) {
       clearTimeout(p.timer);
       // Oversized frames cannot expose their response ID. With concurrent RPCs,
       // retain transport uncertainty instead of naming an unrelated record.
       p.reject(new SafeError(attributable && historyMethods.has(p.method) ? code : 'DAEMON_UNAVAILABLE'));
     }
-    this.pending.clear(); this.emit('disconnect', this.epoch);
+    this.pending.clear(); this.outstanding.clear(); this.emit('disconnect', this.epoch);
   }
   close() { this.closed = true; if (this.socket) this.drop(this.socket); }
 }
