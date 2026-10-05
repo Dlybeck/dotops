@@ -1,5 +1,8 @@
 # Installation and configuration
 
+The supported host remains Linux. The experimental macOS journal build below
+does not establish a working or secure complete macOS connector installation.
+
 ## Prerequisites and clean verification
 
 Use Linux with Node 22, `/usr/bin/flock` and accessible `/proc/self/fd`.
@@ -172,3 +175,50 @@ flowchart TD
 The MCP client launches the bridge; you run the watchdog separately. The journal
 retains ownership metadata, not prompt bodies. Native approvals stay in the owner
 UI. Optional context and skills require explicit configuration or selection.
+
+## Experimental macOS journal build
+
+This is a local backend checkpoint, not complete macOS host support. It selects
+the helper-backed Store on Darwin; private context and control-socket ACL seams,
+Apple SDK build/run checks and authenticated foreground acceptance remain pending.
+Do not activate an existing connector from this checkpoint.
+
+On an approved macOS development host with an existing Apple command-line C
+compiler and the locked Node dependencies:
+
+```sh
+npm run build:macos-helper
+npm run test:macos-store
+```
+
+The explicit build uses `/usr/bin/clang`, or a single compiler executable supplied
+with `CC`. It installs no toolchain, downloads no binary and runs no install hook.
+The helper has no elevated, shell, network or model-control facility. Generated
+files stay under ignored `native/build/`; no prebuilt distribution is included.
+
+The checkout and executable must be canonical and protected from other users'
+writes. The helper requires a same-user mode0700 state leaf, safe ancestors and
+mode0600 single-link files. Missing parents are created only beneath safe
+user-owned parents. Darwin ACL validation accepts deny-only ACLs and conservatively
+rejects every explicit grant, including harmless grants; it never repairs ACLs
+or permissions. This policy needs validation against real macOS home directories.
+
+Before launching the user-built helper, a fixed read-only script runs through
+macOS's `/usr/bin/osascript` and inspects the executable and each ancestor using
+the Darwin ACL API. It uses no Apple events or application automation and requests
+no permission grant. Missing scripting support, API errors, a timeout, unexpected
+output or identity changes fail with `UNSAFE_STATE_HELPER`; there is no POSIX-only
+fallback on Darwin. This system API bridge still requires real-Mac validation.
+
+Linux developers with an existing C compiler can explicitly build the POSIX
+fixture and its syscall-fault library:
+
+```sh
+npm run build:macos-helper -- --linux-fixture
+npm run test:macos-store
+```
+
+These tests copy the executable into private temporary directories. They do not
+launch Codex or touch an installed journal. Passing them cannot establish Darwin
+ACL correctness. The existing `npm test` suite continues to test Linux without
+requiring a compiler. See [platform validation](VALIDATION.md#macos-journal-backend-development-checkpoint).

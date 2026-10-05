@@ -9,6 +9,8 @@
   },
   "scripts": {
     "test": "node --test --test-timeout=15000 test/*.test.mjs",
+    "build:macos-helper": "node scripts/build-macos-helper.mjs",
+    "test:macos-store": "node --test --test-timeout=15000 test/platform/*.test.mjs",
     "probe": "node src/server.mjs",
     "start": "node src/server.mjs"
   },

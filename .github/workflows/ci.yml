@@ -20,3 +20,5 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
+      - run: npm run build:macos-helper -- --linux-fixture
+      - run: npm run test:macos-store
