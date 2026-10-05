@@ -73,9 +73,10 @@ function goalStateKnown(response) {
 }
 
 async function currentChildEvidence(c, threadId) {
-  const inventory = await readCurrentDescendants(c, threadId), evidence = [];
-  if (!inventory) return [{ reason: 'CURRENT_CHILD_STATE_UNAVAILABLE' }];
+  const inventory = await readCurrentDescendants(c, threadId), evidence = [], quiescent = new Set();
+  if (!inventory) return { evidence: [{ reason: 'CURRENT_CHILD_STATE_UNAVAILABLE' }], quiescent };
   for (const node of inventory.threads.values()) {
+    const before = evidence.length;
     const thread = (await c.optional('thread/read', { threadId: node.id, includeTurns: false }))?.thread;
     if (!thread || thread.id !== node.id || thread.parentThreadId !== node.parentThreadId || thread.cwd !== node.cwd ||
         !['idle', 'notLoaded'].includes(thread.status?.type)) {
@@ -95,8 +96,37 @@ async function currentChildEvidence(c, threadId) {
       if (!terminals.available || !terminals.complete || terminals.data.length)
         evidence.push({ threadId: node.id, reason: 'CURRENT_CHILD_PROCESSES_UNVERIFIED' });
     }
+    if (evidence.length === before) quiescent.add(node.id);
   }
-  return evidence;
+  return { evidence, quiescent };
+}
+
+// Native lifecycle completion can establish readiness without establishing each
+// interaction's outcome. Keep exact closure and child-control authority separate.
+function delegationReadiness(record, delegations, quiescent) {
+  const lifecycles = new Map();
+  for (const turnId of new Set(delegations.filter(item => item.state !== 'closed').map(item => item.turnId))) {
+    const owned = record.ownedObligations?.turns?.[turnId], following = new Map(), completed = new Map();
+    if (owned?.fullItemsObserved && !owned.historyConflict && !owned.malformedEvidence && !owned.modelConflict &&
+        ['completed', 'failed', 'interrupted'].includes(owned.modelStatus)) {
+      for (const id of [...(owned.historyOrder ?? [])].reverse()) {
+        const item = owned.items[id];
+        if (item?.type !== 'subAgentActivity' || item.identityConflict || !item.agentThreadId) continue;
+        if (item.kind === 'completed') following.set(item.agentThreadId, item.id);
+        if (item.kind === 'interacted' && following.has(item.agentThreadId)) completed.set(item.id, following.get(item.agentThreadId));
+      }
+    }
+    lifecycles.set(turnId, completed);
+  }
+  const items = delegations.filter(item => item.state !== 'closed').map(item => {
+    const completion = item.reason === 'AMBIGUOUS_INTERACTED_DELEGATION' && !item.identityConflict &&
+      quiescent.has(item.agentThreadId) ? lifecycles.get(item.turnId)?.get(item.itemId) : null;
+    return { turnId: item.turnId, itemId: item.itemId, agentThreadId: item.agentThreadId,
+      ready: Boolean(completion), reason: completion ? 'NATIVE_DELEGATE_LIFECYCLE_QUIESCENT' : 'DELEGATION_READINESS_UNVERIFIED',
+      ...(completion ? { lifecycleCompletionItemId: completion } : {}), outcome: 'unknown', childStopAuthorized: false };
+  });
+  return { count: items.length, unready: items.filter(item => !item.ready).length,
+    items: items.slice(0, 10), truncated: items.length > 10 };
 }
 
 // Read/repair only exact root turns that the connector accepted. Native metadata
@@ -119,7 +149,7 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
   const inventory = await c.terminals(threadId);
   const goal = await c.optional('thread/goal/get', { threadId });
   const queue = await c.optional('thread/queue/list', { threadId, limit: 20 });
-  const childEvidence = await currentChildEvidence(c, threadId);
+  const children = await currentChildEvidence(c, threadId);
   const final = await c.owned(threadId);
   await c.store.tail;
   const observedContinuations = continuations(c, threadId, goal, queue);
@@ -145,7 +175,7 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
   const current = evaluateOwnedObligations(c.store.state.threads[threadId], currentIds, inventory, threadId);
   const structuralEvidence = proof.evidence.filter(item => !item.turnId &&
     !(item.requestId && localLifetimeEnded(c.store.state.operations[item.requestId], c.execution)));
-  current.evidence.push(...structuralEvidence, ...childEvidence);
+  current.evidence.push(...structuralEvidence, ...children.evidence);
   if (!inventory.available || !inventory.complete) current.evidence.push({ reason: 'CURRENT_PROCESS_INVENTORY_UNAVAILABLE' });
   if (endedDispatches.length && inventory.available && inventory.data.length)
     current.evidence.push({ reason: 'CURRENT_PROCESS_OBSERVED' });
@@ -155,9 +185,12 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
     current.evidence.push({ reason: 'CURRENT_GOAL_CONTINUATION' });
   current.continuations = proof.continuations;
   current.targetBusy = proof.targetBusy;
-  const ready = current.verifiedStopped && current.evidence.length === 0 && !proof.targetBusy && ['idle', 'notLoaded'].includes(initial.status?.type) &&
+  const delegateReadiness = delegationReadiness(c.store.state.threads[threadId], current.delegations, children.quiescent);
+  const ready = [...current.models, ...current.processes].every(item => item.state === 'closed') &&
+    delegateReadiness.unready === 0 && current.evidence.length === 0 && !proof.targetBusy && ['idle', 'notLoaded'].includes(initial.status?.type) &&
     current.continuations.every(item => item.state === 'closed');
-  proof.currentReadiness = { ready, endedLocalTurns: ids.filter(id => !currentIds.includes(id)).length, ...scopeSummary(current) };
+  proof.currentReadiness = { ready, endedLocalTurns: ids.filter(id => !currentIds.includes(id)).length,
+    ...scopeSummary(current), delegationReadiness: delegateReadiness };
   return { ...proof, revision, epoch, ignoreRequestId, inventory, goal, queue,
     children: proof.delegations.some(item => item.state !== 'closed') ? 'unverified' : proof.delegations.length ? 'verifiedCompleted' : 'noneObserved',
     initialTargetBusy: !['idle', 'notLoaded'].includes(initial.status?.type) };
