@@ -6,7 +6,8 @@ import { once } from 'node:events';
 import { Controller } from '../src/stage1/controller.mjs';
 import { Native } from '../src/stage1/native.mjs';
 import { listen, WatchdogClient } from '../src/stage1/ipc.mjs';
-import { fixture, A, R, T } from './stage1-fixture.mjs';
+import { verifyChildren } from '../src/stage1/children.mjs';
+import { fixture, A, B, R, T } from './stage1-fixture.mjs';
 
 function history(f, method, records) {
   f.handle = (socket, q) => {
@@ -175,4 +176,59 @@ test('later native completion gets fresh history time instead of inheriting an e
   await event; await c.completionJobs.get(A);
   assert.equal(c.store.state.operations[requestId].phase, 'accepted');
   assert.equal(f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
+
+test('successful paging cannot hide budget exhaustion in later status verification', async t => {
+  const f = await fixture(t); let clock = Date.now();
+  const c = await Controller.open({ root: f.root, socketPath: f.socket, stateDir: f.dir + '/state', now: () => clock });
+  t.after(() => c.close());
+  await c.call('codex_chat_create', { requestId: R, repository: f.cwd, title: 'Verification budget fixture' });
+  await c.store.update(s => { s.operations[randomUUID()] = { kind: 'send', threadId: A, turnId: T, phase: 'accepted' }; });
+  const records = Array.from({ length: 36 }, (_, i) => ({ id: i === 0 ? T : `turn-${i}`, status: 'completed',
+    items: [{ type: 'agentMessage', id: `answer-${i}`, text: 'x'.repeat(120000) }] }));
+  history(f, 'thread/turns/list', records);
+  assert.equal((await c.turns(A)).complete, true);
+  const fast = f.handle;
+  let pages = 0, expired = false;
+  f.handle = (socket, q) => {
+    if (expired && ['thread/goal/get', 'thread/queue/list'].includes(q.method)) assert.fail('No native reads may continue after paging exhausts the caller budget');
+    if (q.method === 'thread/turns/list') { clock += 1000; pages++; return fast(socket, q); }
+    if (q.method === 'thread/backgroundTerminals/list') { clock += 3600; expired = true; }
+  };
+  await assert.rejects(c.call('codex_chat_status', { threadId: A }), { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  assert.equal(pages, 4, 'History must have succeeded before the later verification failure');
+  assert.equal(f.calls.some(q => q.method === 'turn/start'), false);
+});
+
+for (const code of ['HISTORY_READ_BUDGET_EXHAUSTED', 'NATIVE_RESPONSE_TOO_LARGE']) {
+  test(`child verification preserves the explicit unsupported history error ${code}`, async () => {
+    await assert.rejects(verifyChildren({ turns: async () => { throw Object.assign(new Error(code), { code }); } }, A, []), { code });
+  });
+}
+
+test('overlapping status calls retain independent history budgets', async t => {
+  const f = await fixture(t); let clock = Date.now();
+  const c = await Controller.open({ root: f.root, socketPath: f.socket, stateDir: f.dir + '/state', now: () => clock });
+  t.after(() => c.close());
+  await c.call('codex_chat_create', { requestId: R, repository: f.cwd, title: 'Concurrent budget fixture' });
+  f.threads.set(B, f.thread(B));
+  await c.store.update(s => {
+    s.threads[B] = structuredClone(s.threads[A]);
+    s.operations[randomUUID()] = { kind: 'send', threadId: A, turnId: T, phase: 'accepted' };
+  });
+  let release, started;
+  const ready = new Promise(r => { started = r; }), hold = new Promise(r => { release = r; });
+  f.handle = async (socket, q) => {
+    if (q.method !== 'thread/turns/list' || q.params.threadId !== A) return;
+    started(); await hold;
+    socket.send(JSON.stringify({ id: q.id, result: { data: [{ id: T, status: 'completed', items: [] }], nextCursor: null } }));
+    return true;
+  };
+  const earlier = c.call('codex_chat_status', { threadId: A });
+  const earlierFailure = assert.rejects(earlier, { code: 'HISTORY_READ_BUDGET_EXHAUSTED' });
+  await ready; clock += 3000;
+  const later = c.call('codex_chat_status', { threadId: B });
+  clock += 3000;
+  assert.equal((await later).threadId, B, 'The later request remains inside its own budget');
+  release(); await earlierFailure;
 });

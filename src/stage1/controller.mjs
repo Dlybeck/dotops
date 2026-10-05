@@ -480,6 +480,8 @@ export class Controller {
     return result;
   }
   async optional(method, params, options) {
+    const deadlineAt = this.historyReads?.getStore();
+    if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('HISTORY_READ_BUDGET_EXHAUSTED');
     try { return await this.native.request(method, params, options); }
     catch (e) {
       if (options?.deadlineAt !== undefined && e.code === 'DEADLINE_EXPIRED') fail('HISTORY_READ_BUDGET_EXHAUSTED');
