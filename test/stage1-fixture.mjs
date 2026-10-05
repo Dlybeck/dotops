@@ -1,7 +1,6 @@
 import http from 'node:http';
 import { once } from 'node:events';
 import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
 
@@ -9,7 +8,9 @@ export const A = '11111111-1111-4111-8111-111111111111';
 export const B = '22222222-2222-4222-8222-222222222222';
 export const R = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 export const T = '33333333-3333-4333-8333-333333333333';
-export async function fixture(t, { temporaryRoot = tmpdir() } = {}) {
+// Unix sockets have a short pathname bound; TMPDIR may be valid but too long.
+// Keep the existing short default and canonicalize /tmp for Darwin's alias.
+export async function fixture(t, { temporaryRoot = '/tmp' } = {}) {
   const dir = await realpath(await mkdtemp(path.join(temporaryRoot, 'dot-stage1-')));
   const root = dir + '/Projects'; await mkdir(root); await mkdir(root + '/repo');
   const server = http.createServer(); const wss = new WebSocketServer({ server });
