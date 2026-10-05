@@ -33,8 +33,10 @@ function mergeItem(previous, next) {
   if (!previous) return next;
   const identityConflict = previous.identityConflict || previous.type !== next.type ||
     next.type === 'commandExecution' && previous.processId !== null && next.processId !== null && previous.processId !== next.processId ||
-    next.type === 'subAgentActivity' && previous.agentThreadId !== null && next.agentThreadId !== null && previous.agentThreadId !== next.agentThreadId ||
-    next.type === 'collabAgentToolCall' && previous.senderThreadId !== null && next.senderThreadId !== null && previous.senderThreadId !== next.senderThreadId;
+    next.type === 'subAgentActivity' && (previous.agentThreadId !== null && next.agentThreadId !== null && previous.agentThreadId !== next.agentThreadId ||
+      previous.kind !== 'unknown' && next.kind !== 'unknown' && previous.kind !== next.kind) ||
+    next.type === 'collabAgentToolCall' && (previous.senderThreadId !== null && next.senderThreadId !== null && previous.senderThreadId !== next.senderThreadId ||
+      previous.tool !== 'unknown' && next.tool !== 'unknown' && previous.tool !== next.tool);
   const result = { ...previous, ...next, observedTypes: [...new Set([...(previous.observedTypes ?? [previous.type]), next.type])],
     ...(identityConflict ? { identityConflict: true } : {}) };
   if (next.type === 'commandExecution') {
@@ -50,6 +52,40 @@ function mergeItem(previous, next) {
   return result;
 }
 
+function delegationIdentity(item) {
+  if (item?.type === 'subAgentActivity' && ['started', 'interacted'].includes(item.kind))
+    return { type: item.type, kind: item.kind, agentThreadId: item.agentThreadId };
+  if (item?.type === 'collabAgentToolCall' && ['spawnAgent', 'sendInput', 'resumeAgent', 'followupTask'].includes(item.tool) &&
+      ['inProgress', 'completed'].includes(item.status) && item.receiverThreadIds?.length === 1)
+    return { type: item.type, tool: item.tool, senderThreadId: item.senderThreadId, agentThreadId: item.receiverThreadIds[0] };
+  return null;
+}
+
+function retainedDelegationIndex(owned) {
+  const receipts = Object.entries(owned.delegationClosures ?? {}), completionClaims = new Map();
+  const byLaunch = new Map(), items = new Set();
+  // Count every claim, even malformed receipts: a duplicate cannot be laundered
+  // into a unique valid completion by discarding its conflicting claimant.
+  for (const [, receipt] of receipts) {
+    const id = receipt?.completionId;
+    completionClaims.set(id, (completionClaims.get(id) ?? 0) + 1);
+  }
+  for (const [launchId, receipt] of receipts) {
+    if (!receipt || receipt.source !== 'orderedNativeCompletion' || receipt.launchId !== launchId ||
+        !validOwnershipId(receipt.completionId) || receipt.completionId === launchId ||
+        completionClaims.get(receipt.completionId) !== 1) continue;
+    const launch = owned.items[launchId], completion = owned.items[receipt.completionId], identity = delegationIdentity(launch);
+    if (identity && JSON.stringify(identity) === JSON.stringify(receipt.identity) &&
+        completion?.type === 'subAgentActivity' && completion.kind === 'completed' &&
+        validOwnershipId(identity.agentThreadId) && completion.agentThreadId === identity.agentThreadId &&
+        !launch.identityConflict && !completion.identityConflict) {
+      byLaunch.set(launchId, receipt);
+      items.add(launchId); items.add(receipt.completionId);
+    }
+  }
+  return { byLaunch, items };
+}
+
 export function captureOwnedTurn(record, turn, { eventItem = false } = {}) {
   if (!validOwnershipId(turn?.id)) return;
   record.ownedObligations ??= { version: 1, turns: {} };
@@ -62,30 +98,42 @@ export function captureOwnedTurn(record, turn, { eventItem = false } = {}) {
     else owned.modelStatus = turn.status;
   }
   if (!Array.isArray(turn.items)) return;
-  const order = [];
+  const order = [], currentIds = new Set(), observedIds = new Set(owned.observedOrder);
   for (const item of turn.items) {
     const evidence = itemEvidence(item);
     if (!evidence) {
       if (['commandExecution', 'subAgentActivity', 'collabAgentToolCall'].includes(item?.type)) owned.malformedEvidence = true;
       continue;
     }
-    if (order.includes(item.id)) owned.malformedEvidence = true;
-    order.push(item.id);
+    if (currentIds.has(item.id)) owned.malformedEvidence = true;
+    order.push(item.id); currentIds.add(item.id);
     const previous = owned.items[item.id], merged = mergeItem(previous, evidence);
     if ((eventItem || turn.itemsView !== 'full') && JSON.stringify(previous) !== JSON.stringify(merged)) owned.fullItemsObserved = false;
     owned.items[item.id] = merged;
-    if (!owned.observedOrder.includes(item.id)) owned.observedOrder.push(item.id);
+    if (!observedIds.has(item.id)) { owned.observedOrder.push(item.id); observedIds.add(item.id); }
   }
   if (!eventItem && turn.itemsView === 'full') {
+    const retained = retainedDelegationIndex(owned);
     // Legacy native full history may omit command items delivered on the event
     // stream. Preserve positive leader-exit evidence; an omitted unresolved or
     // conflicting item still makes the history incomplete for owned proof.
     owned.historyConflict = Object.entries(owned.items).some(([id, item]) =>
-      !order.includes(id) && !(item.type === 'commandExecution' && !item.identityConflict &&
+      !currentIds.has(id) && !retained.items.has(id) &&
+      !(item.type === 'commandExecution' && !item.identityConflict &&
         ['completed', 'failed'].includes(item.status) && Number.isSafeInteger(item.exitCode)));
     owned.fullItemsObserved = !owned.historyConflict;
     owned.historyOrder = order;
     if (order.some(id => ['subAgentActivity', 'collabAgentToolCall'].includes(owned.items[id].type))) owned.legacyDelegationUnknown = false;
+    // Retain only closure already proved by a complete ordered native snapshot.
+    // This is operation closure, never a receiver-turn or child-control grant.
+    if (terminalModels.has(owned.modelStatus) && !owned.modelConflict && owned.fullItemsObserved && !owned.malformedEvidence) {
+      for (const closure of delegationObligations(owned, undefined, retained)) if (closure.state === 'closed' && closure.completionItemId) {
+        const launch = owned.items[closure.itemId];
+        owned.delegationClosures ??= {};
+        owned.delegationClosures[closure.itemId] = { source: 'orderedNativeCompletion', launchId: closure.itemId,
+          completionId: closure.completionItemId, identity: delegationIdentity(launch) };
+      }
+    }
   }
 }
 
@@ -149,15 +197,18 @@ export function commandObligations(owned, inventory) {
   });
 }
 
-function delegationObligations(owned, threadId) {
+function delegationObligations(owned, threadId, retained = retainedDelegationIndex(owned)) {
   const result = [], pending = new Map(), pairable = new WeakSet();
-  const ordered = (owned.historyOrder ?? owned.observedOrder).map(id => owned.items[id]);
+  const ordered = [...new Set([...(owned.historyOrder ?? owned.observedOrder), ...owned.observedOrder])].map(id => owned.items[id]);
   const complete = owned.fullItemsObserved && !owned.historyConflict && !owned.malformedEvidence;
   for (const item of ordered) {
     if (item.type === 'subAgentActivity' && item.kind === 'completed') {
+      // A retained completion belongs to its original exact operation. It must
+      // not be reused to close a newly observed launch to the same receiver.
+      if (retained.items.has(item.id)) continue;
       const open = pending.get(item.agentThreadId) ?? [];
       if (complete && item.agentThreadId && !item.identityConflict && open.length === 1 && !open[0].identityConflict && pairable.has(open[0])) {
-        open[0].state = 'closed'; open[0].reason = 'ORDERED_NATIVE_COMPLETION';
+        open[0].state = 'closed'; open[0].reason = 'ORDERED_NATIVE_COMPLETION'; open[0].completionItemId = item.id;
       }
       pending.delete(item.agentThreadId);
       continue;
@@ -176,6 +227,12 @@ function delegationObligations(owned, threadId) {
         : item.kind === 'interacted' ? 'AMBIGUOUS_INTERACTED_DELEGATION' : 'DELEGATION_CAUSALITY_UNVERIFIED',
       childStopAuthorized: false, ...(item.identityConflict ? { identityConflict: true } : {}) };
     result.push(obligation);
+    const receipt = retained.byLaunch.get(item.id);
+    if (receipt && senderVerified) {
+      obligation.state = 'closed'; obligation.reason = 'DURABLE_NATIVE_COMPLETION';
+      obligation.completionItemId = receipt.completionId;
+      continue;
+    }
     if (informational) continue;
     if (item.type === 'subAgentActivity' && ['started', 'interacted'].includes(item.kind) ||
         item.type === 'collabAgentToolCall' && ['spawnAgent', 'sendInput', 'resumeAgent', 'followupTask'].includes(item.tool) &&

@@ -8,13 +8,13 @@ import { Store } from './store.mjs';
 import { validateWindows } from './windows.mjs';
 import { loadContext, contextDigest } from './context.mjs';
 import { childEvidence, childItems, mergeChildItems, verifyChildren } from './children.mjs';
-import { executionIdentity, requireLocalExecution, operationExecution } from './execution.mjs';
+import { executionIdentity, requireLocalExecution, operationExecution, localLifetimeEnded } from './execution.mjs';
 import { readDescendants } from './descendants.mjs';
 import { loadCompletedDescendants } from './descendant-loading.mjs';
 import { skillSelection, resolveSkills, readSkills } from './skills.mjs';
 import { latestAssistantExcerpt, sanitizedMessagePage } from '../history-text.mjs';
 import { captureOwnedTurn, validOwnershipId } from './owned-obligations.mjs';
-import { ownedScopeProof, recheckOwnedScope, requireScopeCurrent, scopeSummary } from './owned-scope.mjs';
+import { ownedScopeProof, recheckOwnedScope, requireScopeCurrent, scopeSummary, localTurnLifetimeEnded } from './owned-scope.mjs';
 import { goalMetadata, goalRequestFingerprint, migrateGoalRecords } from './goal-records.mjs';
 export const CONTROL_ROOT = path.join(homedir(), 'Projects/codex-dot-connector');
 
@@ -189,7 +189,7 @@ export class Controller {
     await this.requireClearWork(args.threadId);
     if (!await this.optional('thread/goal/get', { threadId: args.threadId })) fail('WORK_STATE_UNVERIFIED');
     if (Object.values(this.store.state.operations).some(op => op.kind === 'send' && op.threadId === args.threadId &&
-        ['unknown', 'dispatching'].includes(op.phase))) fail('SEND_UNRESOLVED');
+        ['unknown', 'dispatching'].includes(op.phase) && (!this.expanded || !localLifetimeEnded(op, this.execution)))) fail('SEND_UNRESOLVED');
     await this.store.update(s => { s.operations[args.requestId] = { fingerprint, kind: 'reconcile',
       phase: 'dispatching', threadId: args.threadId }; });
     let result;
@@ -201,6 +201,8 @@ export class Controller {
       if (this.native.epoch !== loaded.epoch || !this.native.socket) fail('PREVIOUS_WORK_UNVERIFIED');
       result = { requestId: args.requestId, threadId: args.threadId, phase: 'verified',
         resumedDescendants: loaded.resumed, descendantInventory: proof.descendants,
+        ...(this.expanded ? { verificationScope: 'currentLocalReadiness', currentReadiness: proof.currentReadiness,
+          historicalUnknowns: scopeSummary(proof).unknownOwnedObligations } : {}),
         modelTurnStarted: false, goalChanged: false, existingTurnsAdopted: false,
         snapshotOnly: true, observedAt: this.now() };
     } catch (e) {
@@ -332,7 +334,7 @@ export class Controller {
     const preparation = await this.prepareContext(args, fingerprint);
     if (preparation) return preparation;
     if (this.expanded && !args.expectedTurnId && (args.expectedLastTurnId === undefined || !args.acknowledgeConcurrentStartRisk)) fail('EXPLICIT_START_REQUIRED');
-    if (Object.values(this.store.state.operations).some(op => op.threadId === args.threadId && op.kind === 'send' && ['unknown', 'dispatching'].includes(op.phase))) fail('SEND_UNRESOLVED');
+    if (Object.values(this.store.state.operations).some(op => op.threadId === args.threadId && op.kind === 'send' && ['unknown', 'dispatching'].includes(op.phase) && (!this.expanded || !localLifetimeEnded(op, this.execution)))) fail('SEND_UNRESOLVED');
     if (!args.expectedTurnId && !['idle', 'notLoaded'].includes(thread.status?.type)) fail('CHAT_ACTIVE');
     if (args.expectedTurnId) this.steerable(args.threadId, args.expectedTurnId);
     // Capture completed owned turns before later sends move them out of bounded history.
@@ -478,7 +480,8 @@ export class Controller {
     if (thread.status?.type !== 'idle') fail('CHAT_ACTIVE');
     const history = await this.turns(args.threadId);
     if (!history.data.length && !history.complete) fail('TURN_STATE_UNVERIFIED');
-    if (history.data.some(t => t.status === 'inProgress')) fail('CHAT_ACTIVE');
+    if (history.data.some(t => t.status === 'inProgress' &&
+        (!this.expanded || !localTurnLifetimeEnded(this.store.state, args.threadId, t.id, this.execution)))) fail('CHAT_ACTIVE');
     if ((history.data[0]?.id ?? null) !== args.expectedLastTurnId) fail('CHAT_CHANGED');
     if (history.data.some(t => typeof t.id !== 'string' || !t.id || t.id.length > 200)) fail('INVALID_BACKEND_RESPONSE');
     const finalThread = await this.owned(args.threadId);
@@ -921,16 +924,16 @@ export class Controller {
     const threadId = thread.id, reasons = [];
     const proof = await ownedScopeProof(this, threadId);
     if (thread.status?.type !== 'idle' || proof.targetBusy) reasons.push(thread.status?.type === 'notLoaded' ? 'CHAT_NOT_LOADED' : 'CHAT_NOT_IDLE');
-    if (Object.values(this.store.state.operations).some(op => op.kind === 'send' && op.threadId === threadId && ['unknown', 'dispatching'].includes(op.phase))) reasons.push('SEND_UNRESOLVED');
+    if (Object.values(this.store.state.operations).some(op => op.kind === 'send' && op.threadId === threadId && ['unknown', 'dispatching'].includes(op.phase) && !localLifetimeEnded(op, this.execution))) reasons.push('SEND_UNRESOLVED');
     try { await requireLocalExecution(thread, this.scope, this.store.state.threads[threadId].cwd); }
     catch { reasons.push('EXECUTION_ENVIRONMENT_UNVERIFIED'); }
-    if (!proof.verifiedStopped) reasons.push('PREVIOUS_WORK_UNVERIFIED');
-    if (proof.processes.some(item => item.state !== 'closed')) reasons.push('NATIVE_PROCESSES_UNVERIFIED');
+    if (!proof.currentReadiness.ready) reasons.push('PREVIOUS_WORK_UNVERIFIED');
+    if (proof.currentReadiness.ownedProcesses.open) reasons.push('NATIVE_PROCESSES_UNVERIFIED');
     if (!proof.goal || !Array.isArray(proof.queue?.data)) reasons.push('WORK_STATE_UNVERIFIED');
     else if (proof.queue.data.length || proof.queue.nextCursor) reasons.push('UNMANAGED_QUEUE');
     return { newStart: thread.status?.type === 'notLoaded' && !reasons.includes('SEND_UNRESOLVED') && !reasons.includes('UNMANAGED_QUEUE')
         ? 'resumeThenPreflightRequired' : reasons.length ? 'blocked' : 'preflightRequired', reasons: [...new Set(reasons)],
-      ...scopeSummary(proof), children: proof.children,
+      ...scopeSummary(proof), currentReadiness: proof.currentReadiness, children: proof.children,
       reconciliation: { tool: 'codex_chat_reconcile', explicitActionRequired: true, mayLoadCompletedDescendants: false },
       descendantInventory: null,
       runtimeProof: { childObservation: proof.children, durableUnloadedChildClosureAvailable: false, authorizesStart: false },
@@ -989,7 +992,7 @@ export class Controller {
         reviews: [...this.nativeReviews.values()].filter(q => q.threadId === threadId).slice(-8),
         reviewCount: [...this.nativeReviews.values()].filter(q => q.threadId === threadId).length,
         requiredIntegration: 'Authenticated owner callback; native approvals remain unavailable through model tools.' },
-      title: safeText(thread.name, 160).text, nativeStatus: thread.status?.type ?? 'unknown', historicalTestSends: this.store.state.liveTurns, persistenceRecovery: { pendingObservations: this.persistenceRetries.get(threadId)?.length ?? 0, state: this.persistenceRetries.has(threadId) ? 'unverified' : 'clear' }, contextDelivery: { developerConfigured: !!this.context.developer, tpmConfigured: !!this.context.tpm }, legacyWindowsEnforced: false, ...(latest ? { latestTurnId: latest.data[0]?.id ?? null, latestTurnStateKnown: latest.data.length > 0 || latest.complete } : {}), turn: progress, trackedOwnedTerminals, nativeTrackedTerminals: terminals?.available ? terminals.data.length : null, terminalInventoryComplete: terminals?.complete ?? false, tokenUsage: this.observedUsage.get(threadId) ?? null, operations: selected.map(([requestId, op]) => ({ requestId, phase: op.phase, executionState: operationExecution(op, history, this.store.state.threads[threadId].terminalTurns?.[op.turnId]), dispatchBinding: op.dispatchBinding ?? null, turnId: op.turnId ?? null, windowId: op.windowId ?? null, deadlineAt: op.deadlineAt, deadlineEnforcement: 'disabled', ...(op.unexpectedNativeTurn ? { unexpectedNativeTurn: true } : {}),
+      title: safeText(thread.name, 160).text, nativeStatus: thread.status?.type ?? 'unknown', historicalTestSends: this.store.state.liveTurns, persistenceRecovery: { pendingObservations: this.persistenceRetries.get(threadId)?.length ?? 0, state: this.persistenceRetries.has(threadId) ? 'unverified' : 'clear' }, contextDelivery: { developerConfigured: !!this.context.developer, tpmConfigured: !!this.context.tpm }, legacyWindowsEnforced: false, ...(latest ? { latestTurnId: latest.data[0]?.id ?? null, latestTurnStateKnown: latest.data.length > 0 || latest.complete } : {}), turn: progress, trackedOwnedTerminals, nativeTrackedTerminals: terminals?.available ? terminals.data.length : null, terminalInventoryComplete: terminals?.complete ?? false, tokenUsage: this.observedUsage.get(threadId) ?? null, operations: selected.map(([requestId, op]) => ({ requestId, phase: op.phase, executionState: operationExecution(op, history, this.store.state.threads[threadId].terminalTurns?.[op.turnId]), dispatchBinding: op.dispatchBinding ?? null, localExecutionLifetime: localLifetimeEnded(op, this.execution) ? 'endedByHostReboot' : 'currentOrUnestablished', turnId: op.turnId ?? null, windowId: op.windowId ?? null, deadlineAt: op.deadlineAt, deadlineEnforcement: 'disabled', ...(op.unexpectedNativeTurn ? { unexpectedNativeTurn: true } : {}),
       ...(op.nativeRejection ? { nativeRejection: op.nativeRejection } : {}),
       ...(op.rejectionVerification ? { rejectionVerification: op.rejectionVerification } : {}) })), operationCount: ops.length, nextCursor: null, stopVerification: await this.verifyStop(threadId) };
     // Fit IPC without discarding newest output. Continue older operation receipts

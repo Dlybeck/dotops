@@ -1,3 +1,5 @@
+import { localLifetimeEnded } from './execution.mjs';
+import { readCurrentDescendants } from './descendants.mjs';
 import { fail } from '../safety.mjs';
 import { evaluateOwnedObligations, migrateOwnedObligations, validOwnershipId } from './owned-obligations.mjs';
 import { goalOperationClosed, retainGoalClosure, validGoalFingerprint } from './goal-records.mjs';
@@ -7,9 +9,16 @@ export function ownedTurnIds(state, threadId) {
     op.threadId === threadId && op.phase === 'accepted' && validOwnershipId(op.turnId)).map(op => op.turnId))];
 }
 
+export function localTurnLifetimeEnded(state, threadId, turnId, execution) {
+  const dispatches = Object.values(state.operations).filter(op => op.kind === 'send' && op.threadId === threadId &&
+    op.turnId === turnId && ['accepted', 'unknown', 'dispatching'].includes(op.phase));
+  return dispatches.length > 0 && dispatches.every(op => localLifetimeEnded(op, execution));
+}
+
 export function scopeRevision(state, threadId, ignoreRequestId) {
   const record = state.threads[threadId];
-  return JSON.stringify([ownedTurnIds(state, threadId), record.ownedObligations,
+  return JSON.stringify([Object.values(state.operations).filter(op => op.kind === 'send' && op.threadId === threadId && op.phase === 'accepted')
+    .map(op => [op.turnId, op.dispatchBinding]), record.ownedObligations,
     record.commandItems, record.childTurns, record.childItems, record.terminalTurns,
     Object.entries(state.operations).filter(([id, op]) => op.threadId === threadId &&
       (op.kind === 'goal' || op.kind === 'send' && ['unknown', 'dispatching'].includes(op.phase) && id !== ignoreRequestId))]);
@@ -59,15 +68,49 @@ export function scopeSummary(proof) {
     unknownOwnedObligations: bounded(unknown), targetBusy: proof.targetBusy };
 }
 
+function goalStateKnown(response) {
+  return response?.goal === null || ['active', 'paused', 'blocked', 'usageLimited', 'budgetLimited', 'complete'].includes(response?.goal?.status);
+}
+
+async function currentChildEvidence(c, threadId) {
+  const inventory = await readCurrentDescendants(c, threadId), evidence = [];
+  if (!inventory) return [{ reason: 'CURRENT_CHILD_STATE_UNAVAILABLE' }];
+  for (const node of inventory.threads.values()) {
+    const thread = (await c.optional('thread/read', { threadId: node.id, includeTurns: false }))?.thread;
+    if (!thread || thread.id !== node.id || thread.parentThreadId !== node.parentThreadId || thread.cwd !== node.cwd ||
+        !['idle', 'notLoaded'].includes(thread.status?.type)) {
+      evidence.push({ threadId: node.id, reason: thread && !['idle', 'notLoaded'].includes(thread.status?.type)
+        ? 'CURRENT_CHILD_ACTIVE' : 'CURRENT_CHILD_STATE_UNAVAILABLE' });
+      continue;
+    }
+    const goal = await c.optional('thread/goal/get', { threadId: node.id });
+    const queue = await c.optional('thread/queue/list', { threadId: node.id, limit: 20 });
+    if (!goalStateKnown(goal) || !Array.isArray(queue?.data) || queue.nextCursor !== null)
+      evidence.push({ threadId: node.id, reason: 'CURRENT_CHILD_STATE_UNAVAILABLE' });
+    else if (goal.goal?.status === 'active' || queue.data.length)
+      evidence.push({ threadId: node.id, reason: 'CURRENT_CHILD_CONTINUATION' });
+    // Unloaded historical reviewers are not resumed to reconstruct their past.
+    if (thread.status.type === 'idle') {
+      const terminals = await c.terminals(node.id);
+      if (!terminals.available || !terminals.complete || terminals.data.length)
+        evidence.push({ threadId: node.id, reason: 'CURRENT_CHILD_PROCESSES_UNVERIFIED' });
+    }
+  }
+  return evidence;
+}
+
 // Read/repair only exact root turns that the connector accepted. Native metadata
 // exposes no receiver-turn receipt, so unresolved delegation never grants control.
 export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
   await c.recoverPersistence(threadId);
   const initial = await c.owned(threadId), epoch = c.native.epoch;
   const ids = ownedTurnIds(c.store.state, threadId);
+  const currentIds = ids.filter(id => !localTurnLifetimeEnded(c.store.state, threadId, id, c.execution));
+  const endedDispatches = Object.values(c.store.state.operations).filter(op => op.kind === 'send' &&
+    op.threadId === threadId && ['accepted', 'unknown', 'dispatching'].includes(op.phase) && localLifetimeEnded(op, c.execution));
   await c.store.update(s => migrateOwnedObligations(s.threads[threadId], ids));
   if (ids.length) await c.turns(threadId);
-  for (const turnId of ids) {
+  for (const turnId of currentIds) {
     const owned = c.store.state.threads[threadId].ownedObligations?.turns?.[turnId];
     if (!owned?.fullItemsObserved) await c.repairOwnedTurn(threadId, turnId);
   }
@@ -76,6 +119,7 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
   const inventory = await c.terminals(threadId);
   const goal = await c.optional('thread/goal/get', { threadId });
   const queue = await c.optional('thread/queue/list', { threadId, limit: 20 });
+  const childEvidence = await currentChildEvidence(c, threadId);
   const final = await c.owned(threadId);
   await c.store.tail;
   const observedContinuations = continuations(c, threadId, goal, queue);
@@ -98,13 +142,29 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
   proof.evidence.push(...(epoch !== c.native.epoch || !c.native.socket ? [{ reason: 'NATIVE_CONNECTION_CHANGED' }] : []),
     ...(revision !== scopeRevision(c.store.state, threadId, ignoreRequestId) || c.persistenceRetries.has(threadId) ? [{ reason: 'OWNED_SCOPE_CHANGED' }] : []));
   proof.verifiedStopped &&= proof.evidence.length === 0 && proof.continuations.every(item => item.state === 'closed');
+  const current = evaluateOwnedObligations(c.store.state.threads[threadId], currentIds, inventory, threadId);
+  const structuralEvidence = proof.evidence.filter(item => !item.turnId &&
+    !(item.requestId && localLifetimeEnded(c.store.state.operations[item.requestId], c.execution)));
+  current.evidence.push(...structuralEvidence, ...childEvidence);
+  if (!inventory.available || !inventory.complete) current.evidence.push({ reason: 'CURRENT_PROCESS_INVENTORY_UNAVAILABLE' });
+  if (endedDispatches.length && inventory.available && inventory.data.length)
+    current.evidence.push({ reason: 'CURRENT_PROCESS_OBSERVED' });
+  if (!goalStateKnown(goal) || !Array.isArray(queue?.data) || queue.nextCursor !== null)
+    current.evidence.push({ reason: 'CURRENT_CONTINUATION_STATE_UNAVAILABLE' });
+  if (goal && goal.goal?.status === 'active')
+    current.evidence.push({ reason: 'CURRENT_GOAL_CONTINUATION' });
+  current.continuations = proof.continuations;
+  current.targetBusy = proof.targetBusy;
+  const ready = current.verifiedStopped && current.evidence.length === 0 && !proof.targetBusy && ['idle', 'notLoaded'].includes(initial.status?.type) &&
+    current.continuations.every(item => item.state === 'closed');
+  proof.currentReadiness = { ready, endedLocalTurns: ids.filter(id => !currentIds.includes(id)).length, ...scopeSummary(current) };
   return { ...proof, revision, epoch, ignoreRequestId, inventory, goal, queue,
     children: proof.delegations.some(item => item.state !== 'closed') ? 'unverified' : proof.delegations.length ? 'verifiedCompleted' : 'noneObserved',
     initialTargetBusy: !['idle', 'notLoaded'].includes(initial.status?.type) };
 }
 
 export function requireScopeCurrent(c, threadId, proof) {
-  if (!proof.verifiedStopped || proof.revision !== scopeRevision(c.store.state, threadId, proof.ignoreRequestId) ||
+  if (!proof.currentReadiness?.ready || proof.revision !== scopeRevision(c.store.state, threadId, proof.ignoreRequestId) ||
       proof.epoch !== c.native.epoch || !c.native.socket || c.persistenceRetries.has(threadId)) fail('PREVIOUS_WORK_UNVERIFIED');
 }
 
