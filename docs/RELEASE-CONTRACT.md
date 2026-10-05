@@ -80,16 +80,17 @@ activity grants child-stop authority. Last-known agent status, ancestry, cwd and
 latest child turn never grant ownership. There is currently no native exact
 receiver-turn dispatch receipt, so unresolved child work stays conservative.
 
-An unknown `interacted` outcome can coexist with current readiness when complete,
-conflict-free terminal owned-turn history contains a matching receiver lifecycle
-completion after that interaction, and the exact receiver passes fresh current
+Unknown native `started` and `interacted` outcomes can coexist with current readiness
+when fresh complete, conflict-free terminal owned-turn history contains a matching receiver lifecycle
+completion after each activity, and the exact receiver passes fresh current
 descendant activity checks. `currentReadiness.delegationReadiness` reports this
-snapshot separately. Several interactions can precede one lifecycle completion;
-this does not claim that each interaction succeeded or create an operation closure.
+snapshot separately. A single native start followed by one or more interactions can
+precede one unclaimed lifecycle completion; multiple starts remain conservative.
+This does not claim that each operation succeeded or create an operation closure.
 The delegation remains unknown, own-stop remains unverified, and child-control
-authority is unchanged. A later interaction requires a later completion.
-Unresolved started/typed waking operations, missing receivers, incomplete history,
-active work and unavailable required current-state evidence still block.
+authority is unchanged. A later start or interaction requires a later completion.
+Unresolved typed waking operations, missing receivers, incomplete or unavailable
+fresh history, active work and unavailable required current-state evidence still block.
 
 Current receiver checks require complete descendant pagination, matching native
 metadata, known non-active goal and empty queue. An idle receiver also requires

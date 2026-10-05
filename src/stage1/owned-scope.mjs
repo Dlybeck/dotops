@@ -103,23 +103,37 @@ async function currentChildEvidence(c, threadId) {
 
 // Native lifecycle completion can establish readiness without establishing each
 // interaction's outcome. Keep exact closure and child-control authority separate.
-function delegationReadiness(record, delegations, quiescent) {
+function delegationReadiness(record, delegations, quiescent, freshFullTurns) {
   const lifecycles = new Map();
   for (const turnId of new Set(delegations.filter(item => item.state !== 'closed').map(item => item.turnId))) {
     const owned = record.ownedObligations?.turns?.[turnId], following = new Map(), completed = new Map();
-    if (owned?.fullItemsObserved && !owned.historyConflict && !owned.malformedEvidence && !owned.modelConflict &&
+    const starts = new Map(), startCounts = new Map(), interactions = new Set();
+    if (freshFullTurns.has(turnId) && owned?.fullItemsObserved && !owned.historyConflict && !owned.malformedEvidence && !owned.modelConflict &&
         ['completed', 'failed', 'interrupted'].includes(owned.modelStatus)) {
       for (const id of [...(owned.historyOrder ?? [])].reverse()) {
         const item = owned.items[id];
         if (item?.type !== 'subAgentActivity' || item.identityConflict || !item.agentThreadId) continue;
         if (item.kind === 'completed') following.set(item.agentThreadId, item.id);
-        if (item.kind === 'interacted' && following.has(item.agentThreadId)) completed.set(item.id, following.get(item.agentThreadId));
+        const completionId = following.get(item.agentThreadId);
+        if (item.kind === 'interacted' && completionId) {
+          completed.set(item.id, completionId); interactions.add(completionId);
+        }
+        if (item.kind === 'started' && completionId) {
+          startCounts.set(completionId, (startCounts.get(completionId) ?? 0) + 1);
+          if (interactions.has(completionId)) starts.set(item.id, completionId);
+        }
       }
+      // Only the observed single-start -> interaction -> completion lifecycle.
+      // Multiple starts or a completion already claimed by exact closure cannot
+      // establish readiness for another start; their outcomes remain unknown.
+      const claimed = new Set(Object.values(owned.delegationClosures ?? {}).map(receipt => receipt?.completionId));
+      for (const [startId, completionId] of starts) if (startCounts.get(completionId) === 1 && !claimed.has(completionId))
+        completed.set(startId, completionId);
     }
     lifecycles.set(turnId, completed);
   }
   const items = delegations.filter(item => item.state !== 'closed').map(item => {
-    const completion = item.reason === 'AMBIGUOUS_INTERACTED_DELEGATION' && !item.identityConflict &&
+    const completion = !item.identityConflict &&
       quiescent.has(item.agentThreadId) ? lifecycles.get(item.turnId)?.get(item.itemId) : null;
     return { turnId: item.turnId, itemId: item.itemId, agentThreadId: item.agentThreadId,
       ready: Boolean(completion), reason: completion ? 'NATIVE_DELEGATE_LIFECYCLE_QUIESCENT' : 'DELEGATION_READINESS_UNVERIFIED',
@@ -139,10 +153,14 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
   const endedDispatches = Object.values(c.store.state.operations).filter(op => op.kind === 'send' &&
     op.threadId === threadId && ['accepted', 'unknown', 'dispatching'].includes(op.phase) && localLifetimeEnded(op, c.execution));
   await c.store.update(s => migrateOwnedObligations(s.threads[threadId], ids));
-  if (ids.length) await c.turns(threadId);
+  const history = ids.length ? await c.turns(threadId) : { data: [] };
+  // Readiness is a fresh observation, unlike retained exact operation closure.
+  // A summary/unavailable response cannot recycle a previous lifecycle snapshot.
+  const freshFullTurns = new Set(history.data.filter(turn => turn.itemsView === 'full' && Array.isArray(turn.items))
+    .map(turn => turn.id));
   for (const turnId of currentIds) {
     const owned = c.store.state.threads[threadId].ownedObligations?.turns?.[turnId];
-    if (!owned?.fullItemsObserved) await c.repairOwnedTurn(threadId, turnId);
+    if (!owned?.fullItemsObserved && (await c.repairOwnedTurn(threadId, turnId)).complete) freshFullTurns.add(turnId);
   }
   await c.store.tail;
   let revision = scopeRevision(c.store.state, threadId, ignoreRequestId);
@@ -185,7 +203,7 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
     current.evidence.push({ reason: 'CURRENT_GOAL_CONTINUATION' });
   current.continuations = proof.continuations;
   current.targetBusy = proof.targetBusy;
-  const delegateReadiness = delegationReadiness(c.store.state.threads[threadId], current.delegations, children.quiescent);
+  const delegateReadiness = delegationReadiness(c.store.state.threads[threadId], current.delegations, children.quiescent, freshFullTurns);
   const ready = [...current.models, ...current.processes].every(item => item.state === 'closed') &&
     delegateReadiness.unready === 0 && current.evidence.length === 0 && !proof.targetBusy && ['idle', 'notLoaded'].includes(initial.status?.type) &&
     current.continuations.every(item => item.state === 'closed');
