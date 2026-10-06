@@ -86,6 +86,7 @@ completion after each activity, and the exact receiver passes fresh current
 descendant activity checks. `currentReadiness.delegationReadiness` reports this
 snapshot separately. A single native start followed by one or more interactions can
 precede one unclaimed lifecycle completion; multiple starts remain conservative.
+A retained completion consumed by exact closure cannot qualify new interaction-only activity.
 This does not claim that each operation succeeded or create an operation closure.
 The delegation remains unknown, own-stop remains unverified, and child-control
 authority is unchanged. A later start or interaction requires a later completion.

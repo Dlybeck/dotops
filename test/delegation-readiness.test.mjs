@@ -147,18 +147,34 @@ for (const startedLifecycle of [false, true]) for (const variant of ['missing ch
   assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
 });
 
-test('a completion retained for exact closure cannot supply readiness to a new started/interacted lifecycle', async t => {
+for (const startedLifecycle of [false, true]) for (const check of ['status', 'reconcile', 'send']) test(`consumed completion blocks ${startedLifecycle ? 'started/interacted' : 'interaction-only'} ${check} after reconnect`, async t => {
   const s = await setup(t, { startedLifecycle: true });
   s.turn.items = s.turn.items.filter(x => x.id !== 'c2');
   assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.ownedDelegations.open, 0);
-  // Omit the already closed launch, then present new activity before its receipt.
+  const originalClosure = structuredClone(s.c.store.state.threads[A].ownedObligations.turns[T].delegationClosures.c1);
+  assert.equal(originalClosure.completionId, 'c-done');
+  // Omit the closed launch, then present two unresolved activities before its consumed receipt.
   s.turn.items.splice(1, s.turn.items.length - 1,
-    { ...interaction('new-start', C), kind: 'started' }, interaction('new-interaction', C), completion('c-done', C));
+    startedLifecycle ? start('new-start', C) : interaction('new-input-1', C),
+    interaction('new-input-2', C), completion('c-done', C));
   await s.restart();
-  const status = await s.c.call('codex_chat_status', { threadId: A });
-  assert.equal(status.admission.currentReadiness.ready, false);
-  assert.equal(status.admission.ownedDelegations.open, 2);
-  await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  if (check === 'status') {
+    const status = await s.c.call('codex_chat_status', { threadId: A });
+    assert.equal(status.admission.currentReadiness.ready, false);
+    assert.equal(status.admission.currentReadiness.delegationReadiness.unready, 2);
+    assert.equal(status.admission.ownedDelegations.open, 2);
+    const unresolved = status.admission.ownedDelegations.items.filter(x => x.itemId !== 'c1');
+    assert.equal(unresolved.length, 2);
+    assert.ok(unresolved.every(x => x.state === 'unknown' && !x.childStopAuthorized));
+  } else if (check === 'reconcile') {
+    const result = await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A });
+    assert.equal(result.phase, 'unverified');
+    assert.equal(result.code, 'PREVIOUS_WORK_UNVERIFIED');
+    assert.equal(result.modelTurnStarted, false);
+  } else {
+    await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  }
+  assert.deepEqual(s.c.store.state.threads[A].ownedObligations.turns[T].delegationClosures, { c1: originalClosure });
   assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
 });
 

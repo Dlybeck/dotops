@@ -110,12 +110,13 @@ function delegationReadiness(record, delegations, quiescent, freshFullTurns) {
     const starts = new Map(), startCounts = new Map(), interactions = new Set();
     if (freshFullTurns.has(turnId) && owned?.fullItemsObserved && !owned.historyConflict && !owned.malformedEvidence && !owned.modelConflict &&
         ['completed', 'failed', 'interrupted'].includes(owned.modelStatus)) {
+      const claimed = new Set(Object.values(owned.delegationClosures ?? {}).map(receipt => receipt?.completionId));
       for (const id of [...(owned.historyOrder ?? [])].reverse()) {
         const item = owned.items[id];
         if (item?.type !== 'subAgentActivity' || item.identityConflict || !item.agentThreadId) continue;
         if (item.kind === 'completed') following.set(item.agentThreadId, item.id);
         const completionId = following.get(item.agentThreadId);
-        if (item.kind === 'interacted' && completionId) {
+        if (item.kind === 'interacted' && completionId && !claimed.has(completionId)) {
           completed.set(item.id, completionId); interactions.add(completionId);
         }
         if (item.kind === 'started' && completionId) {
@@ -125,8 +126,7 @@ function delegationReadiness(record, delegations, quiescent, freshFullTurns) {
       }
       // Only the observed single-start -> interaction -> completion lifecycle.
       // Multiple starts or a completion already claimed by exact closure cannot
-      // establish readiness for another start; their outcomes remain unknown.
-      const claimed = new Set(Object.values(owned.delegationClosures ?? {}).map(receipt => receipt?.completionId));
+      // establish readiness for another activity; their outcomes remain unknown.
       for (const [startId, completionId] of starts) if (startCounts.get(completionId) === 1 && !claimed.has(completionId))
         completed.set(startId, completionId);
     }
