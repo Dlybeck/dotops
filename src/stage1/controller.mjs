@@ -497,15 +497,33 @@ export class Controller {
     if (Object.values(this.store.state.operations).some(op => op.kind === 'send' && op.threadId === threadId && op.turnId === turnId && (op.stopRequested))) fail('TURN_STOP_REQUESTED');
   }
   async turns(threadId) {
-    const result = []; let cursor;
-    for (let page = 0; page < 3; page++) {
-      const r = await this.optional('thread/turns/list', { threadId, limit: 20, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
-      if (!r) return { data: result, complete: false };
-      if (!Array.isArray(r.data) || r.data.length > 20) fail('INVALID_BACKEND_RESPONSE'); result.push(...r.data); cursor = r.nextCursor;
-      if (!cursor) { await this.recordTerminalTurns(threadId, result); return { data: result, complete: true }; }
+    const result = [], cursors = new Set(), ids = new Set(), duplicateIds = new Set();
+    let cursor, complete = false;
+    try {
+      for (let page = 0; page < 3; page++) {
+        const r = await this.optional('thread/turns/list', { threadId, limit: 20, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
+        if (!r) break;
+        if (!Array.isArray(r.data) || r.data.length > 20) fail('INVALID_BACKEND_RESPONSE');
+        const valid = r.data.filter(turn => validOwnershipId(turn?.id));
+        result.push(...valid);
+        for (const turn of valid) {
+          if (ids.has(turn.id)) duplicateIds.add(turn.id);
+          ids.add(turn.id);
+        }
+        if (valid.length !== r.data.length) fail('INVALID_BACKEND_RESPONSE');
+        if (duplicateIds.size) break;
+        cursor = r.nextCursor;
+        if (cursor === null) { complete = true; break; }
+        if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) break;
+        cursors.add(cursor);
+      }
+    } finally {
+      // Keep positive observations on failure, but conflicting snapshots cannot
+      // establish ordered full-history closure.
+      await this.recordTerminalTurns(threadId, result.map(turn => duplicateIds.has(turn.id)
+        ? { ...turn, itemsView: 'summary' } : turn));
     }
-    await this.recordTerminalTurns(threadId, result);
-    return { data: result, complete: false };
+    return { data: result, complete };
   }
   async recordTerminalTurns(threadId, turns) {
     const record = this.store.state.threads[threadId];
@@ -517,11 +535,17 @@ export class Controller {
     const capturedRecord = { ownedObligations: structuredClone(record.ownedObligations) };
     for (const turn of captured) captureOwnedTurn(capturedRecord, turn);
     const captureChanged = JSON.stringify(capturedRecord.ownedObligations) !== JSON.stringify(record.ownedObligations);
+    // The ownership ledger must survive malformed legacy receipt projections.
+    if (captureChanged) await this.store.update(s => {
+      for (const turn of captured) captureOwnedTurn(s.threads[threadId], turn);
+    });
     for (const turn of turns) {
       if (!owned.has(turn.id) || !['completed', 'interrupted', 'failed'].includes(turn.status)) continue;
       const previous = record.terminalTurns?.[turn.id];
       if (previous && !Array.isArray(turn.items)) continue;
       const items = Array.isArray(turn.items) ? turn.items : [];
+      if (items.some(item => !item || typeof item !== 'object' || Array.isArray(item) ||
+          item.receiverThreadIds != null && !Array.isArray(item.receiverThreadIds))) fail('INVALID_BACKEND_RESPONSE');
       // Persist ownership metadata only, never transcript or command output.
       const receipt = { id: turn.id, status: turn.status,
         items: mergeCommandObservations(previous?.items, items),
@@ -551,29 +575,34 @@ export class Controller {
     await this.owned(threadId);
     const items = [], itemIds = new Set(), cursors = new Set();
     let cursor, complete = false;
-    for (let page = 0; page < 20; page++) {
-      const result = await this.optional('thread/items/list', { threadId, turnId, limit: 20,
-        sortDirection: 'asc', ...(cursor ? { cursor } : {}) });
-      if (!result) break;
-      if (!Array.isArray(result.data) || result.data.length > 20 || result.data.some(entry =>
-        entry?.turnId !== turnId || !validOwnershipId(entry.item?.id) || itemIds.has(entry.item.id))) fail('INVALID_BACKEND_RESPONSE');
-      for (const entry of result.data) {
-        if (itemIds.has(entry.item.id)) fail('INVALID_BACKEND_RESPONSE');
-        itemIds.add(entry.item.id); items.push(entry.item);
+    try {
+      for (let page = 0; page < 20; page++) {
+        const result = await this.optional('thread/items/list', { threadId, turnId, limit: 20,
+          sortDirection: 'asc', ...(cursor ? { cursor } : {}) });
+        if (!result) break;
+        if (!Array.isArray(result.data) || result.data.length > 20) fail('INVALID_BACKEND_RESPONSE');
+        let malformed = false;
+        for (const entry of result.data) {
+          if (entry?.turnId !== turnId || !validOwnershipId(entry.item?.id)) { malformed = true; continue; }
+          if (itemIds.has(entry.item.id)) malformed = true;
+          itemIds.add(entry.item.id); items.push(entry.item);
+        }
+        if (malformed) fail('INVALID_BACKEND_RESPONSE');
+        cursor = result.nextCursor;
+        if (cursor === null) { complete = true; break; }
+        if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) break;
+        cursors.add(cursor);
       }
-      cursor = result.nextCursor;
-      if (cursor === null) { complete = true; break; }
-      if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) break;
-      cursors.add(cursor);
+    } finally {
+      // Returned positive item evidence is retained even when a later page fails.
+      // Items never supply model terminality; retain its independent observation.
+      const status = this.store.state.threads[threadId].ownedObligations?.turns?.[turnId]?.modelStatus
+        ?? this.store.state.threads[threadId].terminalTurns?.[turnId]?.status;
+      await this.store.update(s => {
+        if (!Object.values(s.operations).some(op => op.kind === 'send' && op.threadId === threadId && op.turnId === turnId)) fail('TURN_NOT_OWNED');
+        captureOwnedTurn(s.threads[threadId], { id: turnId, status, items, ...(complete ? { itemsView: 'full' } : {}) });
+      });
     }
-    // Items prove command/delegation evidence, never model terminality. Native
-    // turn status must come from its own observation or retained receipt.
-    const status = this.store.state.threads[threadId].ownedObligations?.turns?.[turnId]?.modelStatus
-      ?? this.store.state.threads[threadId].terminalTurns?.[turnId]?.status;
-    await this.store.update(s => {
-      if (!Object.values(s.operations).some(op => op.kind === 'send' && op.threadId === threadId && op.turnId === turnId)) fail('TURN_NOT_OWNED');
-      captureOwnedTurn(s.threads[threadId], { id: turnId, status, items, ...(complete ? { itemsView: 'full' } : {}) });
-    });
     return { turnId, complete, itemCount: items.length };
   }
   async terminals(threadId) {

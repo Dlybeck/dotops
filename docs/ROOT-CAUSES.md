@@ -76,25 +76,25 @@ ambiguous or unavailable history keeps delivery unknown and recoverable through
 fresh status without resending. Shutdown waits for an in-flight check and preserves
 the resulting journal state.
 
-## Legacy Stage1 unloaded reviewer lifecycle
+## Legacy Stage1 unloaded delegated-agent lifecycle
 
 This section describes the conservative Stage1 tree path. Expanded mode uses the
 [owned-operation flow](COORDINATING-FLOW.md#owned-operations-after-reconnect):
 closed historical descendants need no reattachment; unresolved exact-owned process
 or delegation evidence remains blocking. No child control authority is inferred.
 
-Completed reviewer sessions naturally unload when their observation subscribers
+Completed delegated-agent sessions naturally unload when their observation subscribers
 leave. Native background terminal inventory then rejects the read rather than
 returning an empty list. The former admission path resumed only the root, so a
-later new send remained blocked despite completed reviewer history.
+later new send remained blocked despite completed delegated-agent history.
 
 Explicit reconciliation and ordinary new sends now reattach only eligible
 completed native descendants before taking fresh process/history/goal/queue and
 lineage proof. Read-only status and stop verification retain unknown state.
 Subscriptions add no model turn, settings override, goal/process action, permission
 approval or descendant work ownership. The watchdog owns the observation lifecycle;
-a new connection rechecks it. Natural unload/reconnect and the actual existing
-reviewer tree are separate acceptance checks from synthetic fixture tests.
+a new connection rechecks it. Natural unload/reconnect and the actual native
+delegation tree are separate acceptance checks from synthetic fixture tests.
 
 DB-only native descendant listings can omit fork provenance that detailed thread
 reads retain. Reattachment checks the listed ID, parent and cwd, and requires any

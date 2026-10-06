@@ -66,7 +66,7 @@ Terminal model status closes that model only. Known live native item/process
 pairs still block; unavailable inventory, null live handles, conflicting
 identities and incomplete exact-turn evidence retain named unknown obligations.
 Those historical results remain distinct from current readiness after an
-established local boot boundary or completed native reviewer lifecycle, as described below.
+established local boot boundary or completed native delegated-agent lifecycle, as described below.
 Legacy Stage1 tree and attachment safeguards remain conservative.
 
 Exact legacy turn receipts and command observations migrate without deleting
@@ -80,16 +80,18 @@ activity grants child-stop authority. Last-known agent status, ancestry, cwd and
 latest child turn never grant ownership. There is currently no native exact
 receiver-turn dispatch receipt, so unresolved child work stays conservative.
 
-An unknown `interacted` outcome can coexist with current readiness when complete,
-conflict-free terminal owned-turn history contains a matching receiver lifecycle
-completion after that interaction, and the exact receiver passes fresh current
+Unknown native `started` and `interacted` outcomes can coexist with current readiness
+when fresh complete, conflict-free terminal owned-turn history contains a matching receiver lifecycle
+completion after each activity, and the exact receiver passes fresh current
 descendant activity checks. `currentReadiness.delegationReadiness` reports this
-snapshot separately. Several interactions can precede one lifecycle completion;
-this does not claim that each interaction succeeded or create an operation closure.
+snapshot separately. A single native start followed by one or more interactions can
+precede one unclaimed lifecycle completion; multiple starts remain conservative.
+A retained completion consumed by exact closure cannot qualify new interaction-only activity.
+This does not claim that each operation succeeded or create an operation closure.
 The delegation remains unknown, own-stop remains unverified, and child-control
-authority is unchanged. A later interaction requires a later completion.
-Unresolved started/typed waking operations, missing receivers, incomplete history,
-active work and unavailable required current-state evidence still block.
+authority is unchanged. A later start or interaction requires a later completion.
+Unresolved typed waking operations, missing receivers, incomplete or unavailable
+fresh history, active work and unavailable required current-state evidence still block.
 
 Current receiver checks require complete descendant pagination, matching native
 metadata, known non-active goal and empty queue. An idle receiver also requires
@@ -97,6 +99,43 @@ complete empty native process inventory. A `notLoaded` receiver uses the existin
 inactive native-session rule without resume or inventory reconstruction; this is
 not a process-exit receipt or universal detached-process proof. Every send reruns
 these checks; no lifecycle readiness is retained as a durable closure.
+Unavailable, incomplete or malformed root-turn pagination cannot qualify cached lifecycle
+evidence as fresh. Bounded complete exact-turn item repair requires a fresh terminal
+summary from complete root-turn pagination before it can qualify lifecycle readiness.
+Returned obligations remain observed even when pagination cannot complete.
+
+### Native delegated-agent event semantics
+
+These cases depend on native event evidence, not an agent's role or the caller's
+development workflow. In the supported native multi-agent v2 path:
+
+| Activity kind | Native meaning | DotOps evidence boundary |
+| --- | --- | --- |
+| `started` | Agent creation emits a start activity for the receiver. | A launch observation; not proof of its request outcome or current inactivity. |
+| `interacted` | Messaging and follow-up share this activity kind. | Does not distinguish a queued message from a follow-up that triggers a turn. |
+| `completed` | A completed child turn can emit activity to its initiating parent turn when that association is available. | Child-turn lifecycle evidence; one completion does not prove every overlapping request's outcome. |
+
+Verified upstream reference: native Codex source at commit
+`402f5b6fdf28a7a72c153dbe6fe01e252205d7d6`, including
+[spawn](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/spawn.rs#L224-L234),
+[shared message/follow-up activity](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/message_tool.rs#L86-L96),
+and [terminal child-turn notification](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/agent/control/completion.rs#L50-L88).
+The shared message handler is called with
+[queue-only delivery](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/send_message.rs#L41-L49)
+or [turn-triggering delivery](https://github.com/openai/codex/blob/402f5b6fdf28a7a72c153dbe6fe01e252205d7d6/codex-rs/core/src/tools/handlers/multi_agents_v2/followup_task.rs#L41-L49).
+This is a source reference for the observed event shape, not a guarantee for every
+native server version. DotOps does not infer ownership from an agent role,
+activity-ID naming pattern, ancestry or the child's latest turn.
+
+An ordinary unambiguous `started → completed` or `interacted → completed` pair
+uses the existing exact ordered-completion rule. With overlapping activities,
+interaction-only cycles or a single start followed by several interactions may
+instead qualify for current readiness while exact outcomes remain unknown.
+Interleaved receivers are matched by exact receiver identity. Repeated follow-up
+cycles require their own later completions and fresh current-state checks; a prior
+completion is not proof for later activity. Multiple starts sharing one receipt,
+conflicting identities and incomplete evidence remain blocking. None of these
+cases grants child-control authority or universal detached-process proof.
 
 Status exposes `ownedModel`, `ownedProcesses`, `ownedDelegations`,
 `ownedContinuations`, `unknownOwnedObligations` and `targetBusy`. Own-stop proof
