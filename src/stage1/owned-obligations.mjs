@@ -102,7 +102,8 @@ export function captureOwnedTurn(record, turn, { eventItem = false } = {}) {
   for (const item of turn.items) {
     const evidence = itemEvidence(item);
     if (!evidence) {
-      if (['commandExecution', 'subAgentActivity', 'collabAgentToolCall'].includes(item?.type)) owned.malformedEvidence = true;
+      if (!item || typeof item !== 'object' || Array.isArray(item) ||
+          ['commandExecution', 'subAgentActivity', 'collabAgentToolCall'].includes(item.type)) owned.malformedEvidence = true;
       continue;
     }
     if (currentIds.has(item.id)) owned.malformedEvidence = true;

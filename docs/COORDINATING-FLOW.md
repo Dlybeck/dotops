@@ -64,13 +64,14 @@ historical child. Native interacted activity cannot distinguish non-waking
 messages from waking followups: it stays ambiguous until attributable completion
 resolves it. No such observation grants child-stop authority or ownership of a
 child's newest turn. Missing receiver-turn causal receipts and overlapping inputs
-remain unknown outcomes. Current readiness separately permits ambiguous
-interactions followed by matching native reviewer lifecycle completion when each
-receiver passes fresh complete descendant/activity/continuation checks. Idle
+remain unknown outcomes. Current readiness separately permits a single native start followed by
+ambiguous interactions and an unclaimed matching delegated-agent lifecycle completion in fresh complete
+owned-turn history when each receiver passes fresh complete descendant/activity/continuation checks. Idle
 receivers require complete empty process inventory; unloaded receivers are not
 reattached. `currentReadiness.delegationReadiness` reports that snapshot, while
 delegation outcomes and own-stop proof remain unverified. Missing completions,
-later interactions, other unresolved delegation kinds or current activity block.
+later starts/interactions, unavailable fresh history, other unresolved delegation kinds
+or current activity block.
 
 `codex_chat_reconcile` rejoins the enrolled root without settings overrides and
 checks scoped obligations without starting a model turn, changing goals or
