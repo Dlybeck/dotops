@@ -497,17 +497,33 @@ export class Controller {
     if (Object.values(this.store.state.operations).some(op => op.kind === 'send' && op.threadId === threadId && op.turnId === turnId && (op.stopRequested))) fail('TURN_STOP_REQUESTED');
   }
   async turns(threadId) {
-    const result = [], cursors = new Set(); let cursor;
-    for (let page = 0; page < 3; page++) {
-      const r = await this.optional('thread/turns/list', { threadId, limit: 20, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
-      if (!r) break;
-      if (!Array.isArray(r.data) || r.data.length > 20) fail('INVALID_BACKEND_RESPONSE'); result.push(...r.data); cursor = r.nextCursor;
-      if (cursor === null) { await this.recordTerminalTurns(threadId, result); return { data: result, complete: true }; }
-      if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) break;
-      cursors.add(cursor);
+    const result = [], cursors = new Set(), ids = new Set(), duplicateIds = new Set();
+    let cursor, complete = false;
+    try {
+      for (let page = 0; page < 3; page++) {
+        const r = await this.optional('thread/turns/list', { threadId, limit: 20, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
+        if (!r) break;
+        if (!Array.isArray(r.data) || r.data.length > 20) fail('INVALID_BACKEND_RESPONSE');
+        const valid = r.data.filter(turn => validOwnershipId(turn?.id));
+        result.push(...valid);
+        for (const turn of valid) {
+          if (ids.has(turn.id)) duplicateIds.add(turn.id);
+          ids.add(turn.id);
+        }
+        if (valid.length !== r.data.length) fail('INVALID_BACKEND_RESPONSE');
+        if (duplicateIds.size) break;
+        cursor = r.nextCursor;
+        if (cursor === null) { complete = true; break; }
+        if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) break;
+        cursors.add(cursor);
+      }
+    } finally {
+      // Keep positive observations on failure, but conflicting snapshots cannot
+      // establish ordered full-history closure.
+      await this.recordTerminalTurns(threadId, result.map(turn => duplicateIds.has(turn.id)
+        ? { ...turn, itemsView: 'summary' } : turn));
     }
-    await this.recordTerminalTurns(threadId, result);
-    return { data: result, complete: false };
+    return { data: result, complete };
   }
   async recordTerminalTurns(threadId, turns) {
     const record = this.store.state.threads[threadId];
