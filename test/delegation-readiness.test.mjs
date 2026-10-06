@@ -338,4 +338,3 @@ for (const variant of ['missing', 'empty', 'false', 'oversized', 'repeated']) te
   await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
   assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
 });
-
