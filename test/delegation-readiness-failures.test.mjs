@@ -60,3 +60,59 @@ for (const variant of ['malformed page', 'transport failure']) test(`failed late
   await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
   assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
 });
+
+for (const variant of ['null item', 'malformed receiver list']) test(`malformed later owned turn retains earlier obligations: ${variant}`, async t => {
+  const s = await setup(t);
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, true);
+  const root = s.f.threads.get(A), U = randomUUID();
+  s.f.handle = (socket, q) => {
+    if (q.method !== 'turn/start') return;
+    const turn = { id: U, status: 'inProgress', itemsView: 'full', items: [{ type: 'userMessage', id: 'next', clientId: q.params.clientUserMessageId, content: q.params.input }] };
+    root.turns.push(turn);
+    socket.send(JSON.stringify({ id: q.id, result: { turn } })); return true;
+  };
+  assert.equal((await s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true })).phase, 'accepted');
+  root.turns[1].status = 'completed';
+  s.f.handle = null;
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, true);
+  s.turn.items.push(interaction('late-input', C));
+  const malformed = variant === 'null item' ? null : { type: 'collabAgentToolCall', id: 'malformed-child', receiverThreadIds: 1 };
+  s.f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    const data = q.params.cursor ? [{ id: U, status: 'completed', itemsView: 'full', items: [malformed] }] : [s.turn];
+    socket.send(JSON.stringify({ id: q.id, result: { data, nextCursor: q.params.cursor ? null : 'later' } })); return true;
+  };
+  assert.equal((await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A })).phase, 'unverified');
+  assert.equal(s.c.store.state.threads[A].ownedObligations.turns[T].items['late-input']?.kind, 'interacted');
+  s.turn.items = s.turn.items.filter(item => item.id !== 'late-input');
+  s.f.handle = null;
+  await s.restart();
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, false);
+  await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Third', expectedLastTurnId: U, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 2);
+});
+
+for (const variant of ['malformed page', 'transport failure']) test(`failed fresh item repair retains returned obligations: ${variant}`, async t => {
+  const s = await setup(t);
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, true);
+  s.f.handle = (socket, q) => {
+    if (q.method === 'thread/turns/list') {
+      socket.send(JSON.stringify({ id: q.id, result: { data: [{ id: T, status: 'completed', itemsView: 'summary' }], nextCursor: null } })); return true;
+    }
+    if (q.method !== 'thread/items/list') return;
+    if (q.params.cursor) {
+      if (variant === 'transport failure') socket.close();
+      else socket.send(JSON.stringify({ id: q.id, result: { data: null, nextCursor: null } }));
+      return true;
+    }
+    const data = [...s.turn.items, interaction('late-input', C)].map(item => ({ turnId: T, item }));
+    socket.send(JSON.stringify({ id: q.id, result: { data, nextCursor: 'later' } })); return true;
+  };
+  assert.equal((await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A })).phase, 'unverified');
+  assert.equal(s.c.store.state.threads[A].ownedObligations.turns[T].items['late-input']?.kind, 'interacted');
+  s.f.handle = null;
+  await s.restart();
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, false);
+  await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
