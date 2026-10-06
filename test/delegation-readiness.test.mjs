@@ -223,14 +223,18 @@ for (const startedLifecycle of [false, true]) test(`${startedLifecycle ? 'starte
   else assertUnknownOutcomes(s, status.admission);
 });
 
-for (const variant of ['summary', 'unavailable', 'missing turn']) test(`reconnect cannot recycle cached started/interacted readiness with ${variant} history`, async t => {
+for (const variant of ['summary', 'unavailable', 'missing turn', 'missing status', 'unknown status']) test(`reconnect cannot recycle cached started/interacted readiness with ${variant} history`, async t => {
   const s = await setup(t, { startedLifecycle: true });
   assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, true);
   await s.restart();
   s.f.handle = (socket, q) => {
     if (q.method !== 'thread/turns/list') return;
+    const turn = { ...s.turn };
+    if (variant === 'summary') turn.itemsView = 'summary';
+    if (variant === 'missing status') delete turn.status;
+    if (variant === 'unknown status') turn.status = 'unknown';
     const response = variant === 'unavailable' ? { error: { code: -32601, message: 'Unsupported' } }
-      : { result: { data: variant === 'missing turn' ? [] : [{ ...s.turn, itemsView: 'summary' }], nextCursor: null } };
+      : { result: { data: variant === 'missing turn' ? [] : [turn], nextCursor: null } };
     socket.send(JSON.stringify({ id: q.id, ...response })); return true;
   };
   const reconciled = await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A });
