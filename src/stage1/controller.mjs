@@ -500,11 +500,10 @@ export class Controller {
     const result = [], cursors = new Set(); let cursor;
     for (let page = 0; page < 3; page++) {
       const r = await this.optional('thread/turns/list', { threadId, limit: 20, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
-      if (!r) return { data: result, complete: false };
+      if (!r) break;
       if (!Array.isArray(r.data) || r.data.length > 20) fail('INVALID_BACKEND_RESPONSE'); result.push(...r.data); cursor = r.nextCursor;
       if (cursor === null) { await this.recordTerminalTurns(threadId, result); return { data: result, complete: true }; }
-      if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor))
-        return { data: result, complete: false };
+      if (typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) break;
       cursors.add(cursor);
     }
     await this.recordTerminalTurns(threadId, result);

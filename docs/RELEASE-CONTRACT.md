@@ -100,7 +100,9 @@ inactive native-session rule without resume or inventory reconstruction; this is
 not a process-exit receipt or universal detached-process proof. Every send reruns
 these checks; no lifecycle readiness is retained as a durable closure.
 Unavailable, incomplete or malformed root-turn pagination cannot qualify cached lifecycle
-evidence as fresh; an existing bounded complete exact-turn item repair remains valid.
+evidence as fresh. Bounded complete exact-turn item repair requires a fresh terminal
+summary from complete root-turn pagination before it can qualify lifecycle readiness.
+Returned obligations remain observed even when pagination cannot complete.
 
 ### Native delegated-agent event semantics
 

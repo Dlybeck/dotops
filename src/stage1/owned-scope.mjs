@@ -156,11 +156,14 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
   const history = ids.length ? await c.turns(threadId) : { data: [] };
   // Readiness is a fresh observation, unlike retained exact operation closure.
   // A summary/unavailable response cannot recycle a previous lifecycle snapshot.
-  const freshFullTurns = new Set((history.complete ? history.data : []).filter(turn => turn.itemsView === 'full' && Array.isArray(turn.items) &&
+  const freshTerminalTurns = new Set((history.complete ? history.data : []).filter(turn =>
     ['completed', 'failed', 'interrupted'].includes(turn.status)).map(turn => turn.id));
+  const freshFullTurns = new Set(history.data.filter(turn => freshTerminalTurns.has(turn.id) &&
+    turn.itemsView === 'full' && Array.isArray(turn.items)).map(turn => turn.id));
   for (const turnId of currentIds) {
     const owned = c.store.state.threads[threadId].ownedObligations?.turns?.[turnId];
-    if (!owned?.fullItemsObserved && (await c.repairOwnedTurn(threadId, turnId)).complete) freshFullTurns.add(turnId);
+    if (!owned?.fullItemsObserved && (await c.repairOwnedTurn(threadId, turnId)).complete && freshTerminalTurns.has(turnId))
+      freshFullTurns.add(turnId);
   }
   await c.store.tail;
   let revision = scopeRevision(c.store.state, threadId, ignoreRequestId);

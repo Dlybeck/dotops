@@ -259,12 +259,62 @@ for (const lateInteraction of [false, true]) test(`unavailable later history pag
   assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
 });
 
+for (const variant of ['terminal summary', 'missing status', 'unknown status', 'unavailable history', 'malformed cursor']) test(`repaired lifecycle readiness requires fresh terminal evidence: ${variant}`, async t => {
+  const s = await setup(t, { startedLifecycle: true });
+  s.turn.itemsView = 'summary';
+  await s.c.turns(A);
+  assert.equal(s.c.store.state.threads[A].ownedObligations.turns[T].fullItemsObserved, false);
+  await s.restart();
+  s.f.handle = (socket, q) => {
+    if (q.method === 'thread/items/list') {
+      socket.send(JSON.stringify({ id: q.id, result: { data: s.turn.items.map(item => ({ turnId: T, item })), nextCursor: null } })); return true;
+    }
+    if (q.method !== 'thread/turns/list') return;
+    const turn = { ...s.turn };
+    if (variant === 'missing status') delete turn.status;
+    if (variant === 'unknown status') turn.status = 'unknown';
+    const response = variant === 'unavailable history' ? { error: { code: -32601, message: 'Unsupported' } }
+      : { result: { data: [turn], ...(variant === 'malformed cursor' ? {} : { nextCursor: null }) } };
+    socket.send(JSON.stringify({ id: q.id, ...response })); return true;
+  };
+  const result = await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A });
+  assert.equal(result.phase, variant === 'terminal summary' ? 'verified' : 'unverified');
+  assert.equal(result.modelTurnStarted, false);
+  assert.ok(s.f.calls.some(q => q.method === 'thread/items/list'), 'The complete item-repair path must be exercised');
+  assert.equal(s.c.store.state.threads[A].ownedObligations.turns[T].fullItemsObserved, true);
+  assert.equal(Object.keys(s.c.store.state.threads[A].ownedObligations.turns[T].delegationClosures ?? {}).length, 0);
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
+
+for (const variant of ['missing cursor', 'unsupported later page', 'repeated cursor']) test(`partial history retains newly observed obligations: ${variant}`, async t => {
+  const s = await setup(t, { startedLifecycle: true });
+  s.turn.items = s.turn.items.filter(x => x.id !== 'c2');
+  assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.ownedDelegations.open, 0);
+  const closure = structuredClone(s.c.store.state.threads[A].ownedObligations.turns[T].delegationClosures.c1);
+  s.turn.items.push(interaction('late-input', C));
+  await s.restart();
+  s.f.handle = (socket, q) => {
+    if (q.method !== 'thread/turns/list') return;
+    const response = q.params.cursor && variant === 'unsupported later page' ? { error: { code: -32601, message: 'Unsupported page' } }
+      : { result: { data: q.params.cursor ? [] : [s.turn], ...(variant === 'missing cursor' ? {} : { nextCursor: 'later' }) } };
+    socket.send(JSON.stringify({ id: q.id, ...response })); return true;
+  };
+  const result = await s.c.call('codex_chat_reconcile', { requestId: randomUUID(), threadId: A });
+  assert.equal(result.phase, 'unverified');
+  assert.equal(result.modelTurnStarted, false);
+  const owned = s.c.store.state.threads[A].ownedObligations.turns[T];
+  assert.equal(owned.items['late-input'].kind, 'interacted');
+  assert.deepEqual(owned.delegationClosures, { c1: closure });
+  await assert.rejects(s.c.call('codex_chat_send', { requestId: randomUUID(), threadId: A, text: 'Next', expectedLastTurnId: T, acknowledgeConcurrentStartRisk: true }), { code: 'PREVIOUS_WORK_UNVERIFIED' });
+  assert.equal(s.f.calls.filter(q => q.method === 'turn/start').length, 1);
+});
+
 for (const variant of ['missing', 'empty', 'false', 'oversized', 'repeated']) test(`malformed root history cursor blocks started/interacted readiness: ${variant}`, async t => {
   const s = await setup(t, { startedLifecycle: true });
   s.f.handle = (socket, q) => {
     if (q.method !== 'thread/turns/list') return;
     const nextCursor = { empty: '', false: false, oversized: 'x'.repeat(2049), repeated: 'repeat' }[variant];
-    const result = { data: [s.turn], ...(variant === 'missing' ? {} : { nextCursor }) };
+    const result = { data: variant === 'repeated' && q.params.cursor ? [] : [s.turn], ...(variant === 'missing' ? {} : { nextCursor }) };
     socket.send(JSON.stringify({ id: q.id, result })); return true;
   };
   assert.equal((await s.c.call('codex_chat_status', { threadId: A })).admission.currentReadiness.ready, false);
