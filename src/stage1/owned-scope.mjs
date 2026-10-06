@@ -162,7 +162,8 @@ export async function ownedScopeProof(c, threadId, { ignoreRequestId } = {}) {
     turn.itemsView === 'full' && Array.isArray(turn.items)).map(turn => turn.id));
   for (const turnId of currentIds) {
     const owned = c.store.state.threads[threadId].ownedObligations?.turns?.[turnId];
-    if (!owned?.fullItemsObserved && (await c.repairOwnedTurn(threadId, turnId)).complete && freshTerminalTurns.has(turnId))
+    const freshSummary = freshTerminalTurns.has(turnId) && !freshFullTurns.has(turnId);
+    if ((!owned?.fullItemsObserved || freshSummary) && (await c.repairOwnedTurn(threadId, turnId)).complete && freshTerminalTurns.has(turnId))
       freshFullTurns.add(turnId);
   }
   await c.store.tail;
