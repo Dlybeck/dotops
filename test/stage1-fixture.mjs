@@ -44,14 +44,17 @@ export async function fixture(t) {
         result = { data: descendants.slice(offset, offset + p.limit),
           nextCursor: offset + p.limit < descendants.length ? String(offset + p.limit) : null };
       }
-      else if (q.method === 'thread/turns/list') result = { data: [...(threads.get(p.threadId)?.turns ?? [])].reverse(), nextCursor: null };
+      else if (q.method === 'thread/turns/list') {
+        const turns = [...(threads.get(p.threadId)?.turns ?? [])].reverse(), offset = Number(p.cursor ?? 0);
+        result = { data: turns.slice(offset, offset + p.limit), nextCursor: offset + p.limit < turns.length ? String(offset + p.limit) : null };
+      }
       else if (q.method === 'thread/backgroundTerminals/list') result = { data: f.terminals ?? [], nextCursor: null };
       else if (q.method === 'thread/backgroundTerminals/terminate') { f.terminals = (f.terminals ?? []).filter(x => x.processId !== p.processId); result = {}; }
       else if (q.method === 'thread/goal/clear') { f.goal = null; result = {}; }
       else if (q.method === 'thread/goal/set') { f.goal = { ...(f.goal ?? {}), ...(p.objective ? { objective: p.objective } : {}), ...(p.status ? { status: p.status } : {}), ...(p.tokenBudget !== undefined ? { tokenBudget: p.tokenBudget } : {}) }; result = { goal: f.goal }; }
       else if (q.method === 'thread/goal/get') result = { goal: f.goal ?? null };
       else if (q.method === 'thread/queue/list') result = { data: f.queue ?? [], nextCursor: null };
-      else if (q.method === 'turn/start') { const thread = threads.get(p.threadId); const turn = { id: T, status: 'inProgress', items: [{ type: 'userMessage', id: 'u', clientId: p.clientUserMessageId, content: p.input }] }; thread.turns.push(turn); thread.status = { type: 'active' }; result = { turn }; }
+      else if (q.method === 'turn/start') { const thread = threads.get(p.threadId); const turn = { id: thread.turns.some(x => x.id === T) ? `${T}-${thread.turns.length}` : T, status: 'inProgress', items: [{ type: 'userMessage', id: 'u', clientId: p.clientUserMessageId, content: p.input }] }; thread.turns.push(turn); thread.status = { type: 'active' }; result = { turn }; }
       else if (q.method === 'turn/steer') result = { turnId: p.expectedTurnId };
       else if (q.method === 'turn/interrupt') { const thread = threads.get(p.threadId); const turn = thread.turns.find(x => x.id === p.turnId); if (turn) turn.status = 'interrupted'; thread.status = { type: 'idle' }; result = {}; }
       else { s.send(JSON.stringify({ id: q.id, error: { code: -32601, message: 'unsupported' } })); return; }

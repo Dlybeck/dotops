@@ -9,6 +9,7 @@ export const uuid = z.string().uuid();
 const token = z.string().min(1).max(200);
 const thread = { threadId: uuid };
 const page = { limit: z.number().int().min(1).max(20), cursor: z.string().max(2048).nullable().optional() };
+const historyMethods = new Set(['thread/turns/list', 'thread/items/list']);
 const input = z.array(z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string().min(1).max(16000) }).strict(),
   skillSelection.extend({ type: z.literal('skill') }),
@@ -44,16 +45,43 @@ const methods = {
 export class Native extends EventEmitter {
   constructor({ socketPath = APP_SERVER_SOCKET, timeoutMs = 4000 } = {}) {
     super(); this.now = () => Date.now(); this.socketPath = socketPath; this.timeoutMs = timeoutMs;
-    this.pending = new Map(); this.counter = 0; this.epoch = 0; this.closed = false;
+    this.pending = new Map(); this.outstanding = new Set(); this.counter = 0; this.epoch = 0; this.closed = false;
+    this.historyLimits = new Map();
   }
   async request(method, params, { deadlineAt } = {}) {
     if (!methods[method]?.safeParse(params).success) fail('FORBIDDEN_RPC');
     if (deadlineAt !== undefined && (!Number.isSafeInteger(deadlineAt) || this.now() >= deadlineAt)) fail('DEADLINE_EXPIRED');
-    await this.connect();
-    // Connection setup may consume the remaining watchdog deadline. No wire
-    // mutation has happened yet, so expiration here is known not-dispatched.
-    if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
-    return this.dispatch(method, params);
+    let limit = historyMethods.has(method) ? Math.min(params.limit, this.historyLimits.get(method) ?? 20) : null;
+    for (;;) {
+      if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
+      const connection = this.connect();
+      if (deadlineAt !== undefined) {
+        let timer;
+        try {
+          await Promise.race([connection, new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new SafeError('HISTORY_READ_BUDGET_EXHAUSTED')), Math.max(1, deadlineAt - this.now()));
+          })]);
+        } finally { clearTimeout(timer); }
+      } else await connection;
+      // Connection setup may consume the remaining watchdog deadline. No wire
+      // mutation has happened yet, so expiration here is known not-dispatched.
+      if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('DEADLINE_EXPIRED');
+      try {
+        const result = await this.dispatch(method, limit === null ? params : { ...params, limit }, deadlineAt);
+        if (deadlineAt !== undefined && this.now() >= deadlineAt) fail('HISTORY_READ_BUDGET_EXHAUSTED');
+        if (limit !== null && Array.isArray(result.data) && result.data.length > limit) fail('INVALID_BACKEND_RESPONSE');
+        return result;
+      }
+      catch (e) {
+        // Retry only bounded history reads, at the same cursor. An unidentified
+        // oversized frame may also be an event. At limit one, report unsupported
+        // history transport without claiming which response or record caused it.
+        if (limit === null || e.code !== 'NATIVE_RESPONSE_TOO_LARGE') throw e;
+        if (limit === 1) fail('NATIVE_HISTORY_FRAME_UNVERIFIED');
+        limit = Math.max(1, Math.floor(limit / 2));
+        this.historyLimits.set(method, limit);
+      }
+    }
   }
   async connect() {
     if (this.closed) fail('DAEMON_UNAVAILABLE');
@@ -65,12 +93,14 @@ export class Native extends EventEmitter {
   async open() {
     const socket = new WebSocket(`ws+unix:${this.socketPath}:/`, { handshakeTimeout: this.timeoutMs, maxPayload: 2 * 1024 * 1024, perMessageDeflate: false, followRedirects: false });
     this.socket = socket; const epoch = ++this.epoch;
-    socket.on('error', () => this.drop(socket)); socket.on('close', () => this.drop(socket));
+    socket.on('error', e => this.drop(socket, e.code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH' ? 'NATIVE_RESPONSE_TOO_LARGE' : 'DAEMON_UNAVAILABLE'));
+    socket.on('close', () => this.drop(socket));
     socket.on('message', (bytes, binary) => {
       if (this.socket !== socket) return;
       let m; try { if (binary) throw new Error(); m = JSON.parse(bytes.toString()); if (!m || typeof m !== 'object' || Array.isArray(m)) throw new Error(); }
       catch { this.drop(socket); return; }
       if (m.method) { this.emit('event', { ...m, epoch }); return; }
+      this.outstanding.delete(m.id);
       const p = this.pending.get(m.id); if (!p) return;
       clearTimeout(p.timer); this.pending.delete(m.id);
       if (m.error) {
@@ -93,13 +123,23 @@ export class Native extends EventEmitter {
       socket.send(JSON.stringify({ method: 'initialized', params: {} }));
     } catch { this.drop(socket); fail('DAEMON_UNAVAILABLE'); }
   }
-  dispatch(method, params) {
+  dispatch(method, params, historyDeadlineAt) {
     if (this.closed || this.socket?.readyState !== WebSocket.OPEN) return Promise.reject(new SafeError('DAEMON_UNAVAILABLE'));
-    if (this.pending.size >= 16) return Promise.reject(new SafeError('BUSY'));
+    if (this.outstanding.size >= 16) return Promise.reject(new SafeError('BUSY'));
     const socket = this.socket; const id = ++this.counter;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.drop(socket), this.timeoutMs);
+      const remaining = historyDeadlineAt === undefined ? this.timeoutMs : historyDeadlineAt - this.now();
+      const budgetLimited = historyDeadlineAt !== undefined && remaining <= this.timeoutMs;
+      const timer = setTimeout(() => {
+        if (!budgetLimited) { this.drop(socket); return; }
+        // Expiring one read must not expire concurrent callers. Its wire request
+        // remains outstanding until a late response or disconnect, preserving
+        // size-error attribution and the sixteen-request capacity bound.
+        this.pending.delete(id);
+        reject(new SafeError('HISTORY_READ_BUDGET_EXHAUSTED'));
+      }, Math.max(1, Math.min(this.timeoutMs, remaining)));
       this.pending.set(id, { resolve, reject, timer, method });
+      this.outstanding.add(id);
       socket.send(JSON.stringify({ id, method, params }), error => { if (error) this.drop(socket); });
     });
   }
@@ -107,11 +147,17 @@ export class Native extends EventEmitter {
     if (epoch !== this.epoch || this.socket?.readyState !== WebSocket.OPEN) fail('STALE_QUESTION');
     this.socket.send(JSON.stringify({ id, result: { answers } }));
   }
-  drop(socket) {
+  drop(socket, code = 'DAEMON_UNAVAILABLE') {
     if (this.socket !== socket) return;
     this.socket = null; socket.terminate();
-    for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new SafeError('DAEMON_UNAVAILABLE')); }
-    this.pending.clear(); this.emit('disconnect', this.epoch);
+    const attributable = this.outstanding.size === 1 && this.pending.size === 1;
+    for (const p of this.pending.values()) {
+      clearTimeout(p.timer);
+      // Oversized frames cannot expose their response ID. With concurrent RPCs,
+      // retain transport uncertainty instead of naming an unrelated record.
+      p.reject(new SafeError(attributable && historyMethods.has(p.method) ? code : 'DAEMON_UNAVAILABLE'));
+    }
+    this.pending.clear(); this.outstanding.clear(); this.emit('disconnect', this.epoch);
   }
   close() { this.closed = true; if (this.socket) this.drop(this.socket); }
 }

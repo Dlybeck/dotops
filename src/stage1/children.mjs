@@ -133,5 +133,10 @@ export async function verifyChildren(c, rootId, turnIds, proof = {}) {
     proof.evidence = initialEvidence;
     proof.descendants = { count: inventory.threads.size, fingerprint: inventory.fingerprint };
     return observed ? 'verifiedCompleted' : 'noneObserved';
-  } catch { return 'unverified'; }
+  } catch (e) {
+    // Unsupported paging must stop the control request, rather than hiding its
+    // budget/record-size failure and continuing native reads past the reply window.
+    if (['HISTORY_READ_BUDGET_EXHAUSTED', 'NATIVE_HISTORY_FRAME_UNVERIFIED'].includes(e.code)) throw e;
+    return 'unverified';
+  }
 }
